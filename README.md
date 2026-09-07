@@ -9,8 +9,9 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 - Folders in place: `agent/`, `tools/`, `data/`
 - First tool works: `save_note` appends to `data/notes.txt`
 - Tool registry works: look up by name → call the real function
-- Fake brain path works: `agent/loop.py` → registry → save note (still no LLM)
-- Next: choose LLM (API or Ollama) and add a thin `agent/llm.py` adapter
+- Fake brain path works: `agent/loop.py` → registry → save note (`217c01b`)
+- Gemini door works: `agent/llm.py` `ask()` returns text
+- Next: teach Gemini to return a tool plan; swap out `fake_brain`
 
 ## What it will do (v1)
 
@@ -41,7 +42,7 @@ desk-agent/
 | reminder | later | store a reminder with a time |
 | open path | later | open a folder/file on Windows |
 
-## Stack (decide soon)
+## Stack
 
 - Python
-- LLM via API (OpenAI/Gemini) or local Ollama — chosen after structure exists
+- LLM: Gemini API (v1)
