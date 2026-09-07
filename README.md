@@ -8,8 +8,9 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 
 - Folders in place: `agent/`, `tools/`, `data/`
 - First tool works: `save_note` appends to `data/notes.txt`
-- Tool registry works: look up by name → call the real function (still no LLM)
-- Next: fake brain — call tools only through the registry (prove the pipeline)
+- Tool registry works: look up by name → call the real function
+- Fake brain path works: `agent/loop.py` → registry → save note (still no LLM)
+- Next: choose LLM (API or Ollama) and add a thin `agent/llm.py` adapter
 
 ## What it will do (v1)
 
