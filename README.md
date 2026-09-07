@@ -8,7 +8,8 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 
 - Folders in place: `agent/`, `tools/`, `data/`
 - First tool works: `save_note` appends to `data/notes.txt`
-- Next: tool registry (name + description + inputs — still no LLM)
+- Tool registry works: look up by name → call the real function (still no LLM)
+- Next: fake brain — call tools only through the registry (prove the pipeline)
 
 ## What it will do (v1)
 
