@@ -9,7 +9,7 @@ def decide(user_text):
     currently available tools:
     - save_note
 
-    if you don't know what to do, return a short message to the user.
+    if you don't know what to do, return {"name" : "unknown" , "text" : "why you can't help"}
 
     User asked this question:
     """ + user_text)
@@ -21,9 +21,12 @@ def run(user_text):
     result = decide(user_text)
 
     tool = get_tool(result['name'])
-    func = tool['function'](result['text'])
+    if tool is None or result['name'] == "unknown":
+        return result.get('text')
+    else:
+        func = tool['function'](result['text'])
 
     return func
 
 if __name__ == "__main__":
-    print(run("buy milk"))
+    print(run("what is current weather in gujarat?"))

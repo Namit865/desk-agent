@@ -12,7 +12,8 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 - Fake brain path works: `agent/loop.py` → registry → save note (`217c01b`)
 - Gemini door works: `agent/llm.py` `ask()` returns text
 - Gemini router works: `decide()` → JSON plan → registry → `save_note`
-- Next: harden `run` (unknown tool), then add reminder tool / multi-step
+- Harden done: unknown / missing tool returns a message (no crash)
+- Next: reminder tool (second hand)
 
 ## What it will do (v1)
 
