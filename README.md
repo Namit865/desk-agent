@@ -13,8 +13,10 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 - Gemini door works: `agent/llm.py` `ask()` returns text
 - Gemini router works: `decide()` → JSON plan → registry → `save_note`
 - Harden done: unknown / missing tool returns a message (no crash)
-- Reminder tool works: `set_reminder` → `data/reminders.txt`
-- Next: fix `run` so `save_note` still works (don’t always pass `when`); then multi-step (note + remind)
+- Reminder tool works: `set_reminder` → `data/reminders.txt` (`30b1a80`)
+- `run` calls tools with the right args (note vs reminder)
+- Multi-step loop works: one request → note + remind → `"done"` confirmation
+- Next: optional open-path tool, or ship polish (README how-to-run, `.env.example`, `main.py`)
 
 ## What it will do (v1)
 

@@ -2,39 +2,54 @@ from tools.registry import get_tool
 from agent.llm import ask
 import json
 
-def decide(user_text):
+def decide(user_text,already):
     res = ask("""
     you are an router and provide only {"name" : "tool_name", "text" : "tool_text"} format response.
 
-    currently available tools:
-    - save_note
-    - set_reminder
+    Tools: save_note, set_reminder
 
-    if user wants to set a reminder, return the reminder format.
-    reminder format: {"name" : "set_reminder", "text" : "reminder text", "when" : "2026-09-08 10:00:00"} 
-
-    if you don't know what to do, return {"name" : "unknown" , "text" : "why you can't help"}
+    Reply with only one JSON object each time (one tool)
+    
+    Formats:
+    note: {"name":"save_note","text":"..."}
+    reminder: {"name":"set_reminder","text":"...","when":"..."}
+    finished: {"name":"done","text":"short confirmation"}
+    stuck: {"name":"unknown","text":"why you can't help"}
+    
+    If the user asked for two things, do one now; the next round will do the other
 
     User asked this question:
-    """ + user_text)
+    """ + user_text + "already present:" + already)
 
     final_res = json.loads(res)
     return final_res
 
 def run(user_text):
-    result = decide(user_text)
+    history = []
 
-    tool = get_tool(result['name'])
-    if tool is None or result['name'] == "unknown":
-        return result.get('text')
-    else:
-        if result.get('when') is not None:
-            func = tool['function'](result['text'],result.get('when'))
+    for i in range(5):
+        already = ", ".join(history)
+
+        result = decide(user_text, already)
+
+        if result['name'] == "done":
+            return result.get('text')
+
+        tool = get_tool(result['name'])
+        if tool is None or result['name'] == "unknown":
+            return result.get('text')
         else:
-            func = tool['function'](result['text'])
+            if result.get('when') is not None:
+                if result['name'] == "set_reminder":
+                    func = tool['function'](result['text'],result.get('when'))
+                else:
+                    func = tool['function'](result['text'])
+            else:
+                func = tool['function'](result['text'])
+        
+        history.append(result['name'] + " -> " + func)
 
     return func
 
 if __name__ == "__main__":
-    print(run("buy milk"))
-    print(run("remind me to call mom at 6pm"))
+    print(run("save a note to call mom and remind me at 6pm"))
