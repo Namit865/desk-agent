@@ -8,6 +8,10 @@ def decide(user_text):
 
     currently available tools:
     - save_note
+    - set_reminder
+
+    if user wants to set a reminder, return the reminder format.
+    reminder format: {"name" : "set_reminder", "text" : "reminder text", "when" : "2026-09-08 10:00:00"} 
 
     if you don't know what to do, return {"name" : "unknown" , "text" : "why you can't help"}
 
@@ -24,9 +28,13 @@ def run(user_text):
     if tool is None or result['name'] == "unknown":
         return result.get('text')
     else:
-        func = tool['function'](result['text'])
+        if result.get('when') is not None:
+            func = tool['function'](result['text'],result.get('when'))
+        else:
+            func = tool['function'](result['text'])
 
     return func
 
 if __name__ == "__main__":
-    print(run("what is current weather in gujarat?"))
+    print(run("buy milk"))
+    print(run("remind me to call mom at 6pm"))

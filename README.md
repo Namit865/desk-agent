@@ -13,7 +13,8 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 - Gemini door works: `agent/llm.py` `ask()` returns text
 - Gemini router works: `decide()` → JSON plan → registry → `save_note`
 - Harden done: unknown / missing tool returns a message (no crash)
-- Next: reminder tool (second hand)
+- Reminder tool works: `set_reminder` → `data/reminders.txt`
+- Next: fix `run` so `save_note` still works (don’t always pass `when`); then multi-step (note + remind)
 
 ## What it will do (v1)
 
@@ -41,7 +42,7 @@ desk-agent/
 | Tool | Status | What it does |
 |------|--------|--------------|
 | save note | done | append text to `data/notes.txt` |
-| reminder | later | store a reminder with a time |
+| reminder | done | store `when | text` in `data/reminders.txt` |
 | open path | later | open a folder/file on Windows |
 
 ## Stack
