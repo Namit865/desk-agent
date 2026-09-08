@@ -11,7 +11,8 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 - Tool registry works: look up by name → call the real function
 - Fake brain path works: `agent/loop.py` → registry → save note (`217c01b`)
 - Gemini door works: `agent/llm.py` `ask()` returns text
-- Next: teach Gemini to return a tool plan; swap out `fake_brain`
+- Gemini router works: `decide()` → JSON plan → registry → `save_note`
+- Next: harden `run` (unknown tool), then add reminder tool / multi-step
 
 ## What it will do (v1)
 
