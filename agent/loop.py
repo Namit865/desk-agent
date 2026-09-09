@@ -6,13 +6,14 @@ def decide(user_text,already):
     res = ask("""
     you are an router and provide only {"name" : "tool_name", "text" : "tool_text"} format response.
 
-    Tools: save_note, set_reminder
+    Tools: save_note, set_reminder, open_path
 
     Reply with only one JSON object each time (one tool)
     
     Formats:
     note: {"name":"save_note","text":"..."}
     reminder: {"name":"set_reminder","text":"...","when":"..."}
+    path: {"name" : "open_path", "text" : "C:/full/path/here"}
     finished: {"name":"done","text":"short confirmation"}
     stuck: {"name":"unknown","text":"why you can't help"}
     
@@ -22,6 +23,7 @@ def decide(user_text,already):
     """ + user_text + "already present:" + already)
 
     final_res = json.loads(res)
+    print(final_res)
     return final_res
 
 def run(user_text):
@@ -52,4 +54,4 @@ def run(user_text):
     return func
 
 if __name__ == "__main__":
-    print(run("save a note to call mom and remind me at 6pm"))
+    print(run("open the folder C:/Users/Asus/Python/desk-agent"))

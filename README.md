@@ -16,7 +16,9 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 - Reminder tool works: `set_reminder` → `data/reminders.txt` (`30b1a80`)
 - `run` calls tools with the right args (note vs reminder)
 - Multi-step loop works: one request → note + remind → `"done"` confirmation
-- Next: optional open-path tool, or ship polish (README how-to-run, `.env.example`, `main.py`)
+- Next: `open_path` tool (open folder/file on Windows)
+
+
 
 ## What it will do (v1)
 
@@ -28,7 +30,17 @@ Example: *"save a note that I need to call mom tomorrow and remind me at 6pm"* �
 
 ## How to run
 
-Not runnable end-to-end yet. This section grows when the agent loop works.
+```text
+pip install -r requirements.txt
+```
+
+Put your key in `.env` as `GEMINI_API_KEY=...` (never commit `.env`).
+
+```text
+python -m agent.loop
+```
+
+Edit the string in `agent/loop.py` under `if __name__ == "__main__"` to try other requests. A proper `main.py` prompt can come next.
 
 ## Project layout
 
@@ -39,15 +51,22 @@ desk-agent/
   data/      # notes, reminders, and other local files the tools write
 ```
 
+
+
 ## Tools (v1)
 
-| Tool | Status | What it does |
-|------|--------|--------------|
-| save note | done | append text to `data/notes.txt` |
-| reminder | done | store `when | text` in `data/reminders.txt` |
-| open path | later | open a folder/file on Windows |
+
+| Tool      | Status | What it does                    |
+| --------- | ------ | ------------------------------- |
+| save note | done   | append text to `data/notes.txt` |
+| reminder  | done   | store `when                     |
+| open path | later  | open a folder/file on Windows   |
+
+
+
 
 ## Stack
 
 - Python
 - LLM: Gemini API (v1)
+

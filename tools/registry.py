@@ -1,5 +1,6 @@
 from tools.notes import save_note
 from tools.reminder import set_reminder
+from tools.files import open_path
 
 tools = {
     "save_note" : {
@@ -11,6 +12,11 @@ tools = {
         "description" : "Set a reminder to the user",
         "parameters" : "text, when",
         "function" : set_reminder
+    },
+    "open_path" : {
+        "description" : "Open a path in the file explorer",
+        "parameters" : "text",
+        "function" : open_path
     }
 }
 
