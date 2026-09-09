@@ -6,28 +6,20 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 
 ## Status
 
-- Folders in place: `agent/`, `tools/`, `data/`
-- First tool works: `save_note` appends to `data/notes.txt`
-- Tool registry works: look up by name → call the real function
-- Fake brain path works: `agent/loop.py` → registry → save note (`217c01b`)
-- Gemini door works: `agent/llm.py` `ask()` returns text
-- Gemini router works: `decide()` → JSON plan → registry → `save_note`
-- Harden done: unknown / missing tool returns a message (no crash)
-- Reminder tool works: `set_reminder` → `data/reminders.txt` (`30b1a80`)
-- `run` calls tools with the right args (note vs reminder)
-- Multi-step loop works: one request → note + remind → `"done"` confirmation
-- `open_path` works: open folder/file on Windows (`5d85127`)
-- Next: ship polish — `main.py` (type requests), `.env.example`, README cleanup
+v1 core is working:
 
+- Tools: `save_note`, `set_reminder`, `open_path`
+- Agent loop: Gemini/Ollama plans JSON → registry runs tools → repeats until `done`
+- Brain: try **Gemini** first; on failure fall back to **Ollama** (`llama3.2` local)
+- CLI: `python main.py` — type a request, or `exit` to quit
 
+## What it does (v1)
 
-## What it will do (v1)
+- Save notes → `data/notes.txt`
+- Set reminders → `data/reminders.txt`
+- Open a folder or file on Windows
 
-- Save notes
-- Set reminders
-- Open a folder or path on Windows
-
-Example: *"save a note that I need to call mom tomorrow and remind me at 6pm"* → note tool + reminder tool → done.
+Example: *"save a note that I need to call mom and remind me at 6pm"* → note tool + reminder tool → short confirmation.
 
 ## How to run
 
@@ -35,24 +27,34 @@ Example: *"save a note that I need to call mom tomorrow and remind me at 6pm"* �
 pip install -r requirements.txt
 ```
 
-Put your key in `.env` as `GEMINI_API_KEY=...` (never commit `.env`).
+**LLM setup**
+
+- **Cloud (preferred):** set Windows env var `GEMINI_API_KEY` (or put it in `.env` — see `.env.example`). Never commit `.env`.
+- **Local fallback:** install [Ollama](https://ollama.com), pull a model (`ollama pull llama3.2`), leave Ollama running. Used automatically if Gemini fails.
 
 ```text
-python -m agent.loop
+python main.py
 ```
 
-Edit the string in `agent/loop.py` under `if __name__ == "__main__"` to try other requests. A proper `main.py` prompt can come next.
+Type a normal-language request. Type `exit` to quit.
+
+(You can still run `python -m agent.loop` for a hardcoded one-shot test.)
 
 ## Project layout
 
 ```
 desk-agent/
-  agent/     # LLM talk + the think→call-tools→repeat loop
-  tools/     # one file per tool (notes, reminders, open path, …)
-  data/      # notes, reminders, and other local files the tools write
+  main.py          # type requests here
+  agent/
+    llm.py         # ask(): Gemini, then Ollama fallback
+    loop.py        # decide → tools → history → done
+  tools/
+    registry.py    # tool menu + lookup
+    notes.py
+    reminder.py
+    files.py       # open_path
+  data/            # notes.txt, reminders.txt
 ```
-
-
 
 ## Tools (v1)
 
@@ -62,11 +64,8 @@ desk-agent/
 | reminder | done | store `when \| text` in `data/reminders.txt` |
 | open path | done | open a folder/file on Windows |
 
-
-
-
 ## Stack
 
 - Python
-- LLM: Gemini API (v1)
-
+- LLM: Gemini API (primary) + Ollama local (fallback)
+- Tools: normal Python functions via a registry

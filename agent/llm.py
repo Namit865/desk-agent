@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from google import genai
+import requests
 
 load_dotenv()
 
@@ -11,7 +12,7 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-def ask(prompt):
+def ask_cloud(prompt):
     response = client.models.generate_content(
         model = "gemini-3.6-flash",
         contents = prompt,
@@ -19,5 +20,29 @@ def ask(prompt):
 
     return response.text
 
+def ask_local(prompt):
+    url = "http://localhost:11434/api/generate"
+
+    payload = {
+        "model" : "llama3.2", ergh
+        "prompt" : prompt,
+        "stream" : False,
+    }
+
+    response = requests.post(url, json=payload)
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    return data['response']
+
+def ask(prompt):
+    try:
+        return ask_cloud(prompt)
+    except Exception as e:
+        print("Cloud failed, using local:",e)
+        return ask_local(prompt)
+
 if __name__ == "__main__":
-    print(ask("Say hello in one short sentence."))
+    print(ask_local("Say hello in one short sentence."))
