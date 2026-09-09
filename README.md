@@ -16,7 +16,8 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 - Reminder tool works: `set_reminder` → `data/reminders.txt` (`30b1a80`)
 - `run` calls tools with the right args (note vs reminder)
 - Multi-step loop works: one request → note + remind → `"done"` confirmation
-- Next: `open_path` tool (open folder/file on Windows)
+- `open_path` works: open folder/file on Windows (`5d85127`)
+- Next: ship polish — `main.py` (type requests), `.env.example`, README cleanup
 
 
 
@@ -55,12 +56,11 @@ desk-agent/
 
 ## Tools (v1)
 
-
-| Tool      | Status | What it does                    |
-| --------- | ------ | ------------------------------- |
-| save note | done   | append text to `data/notes.txt` |
-| reminder  | done   | store `when                     |
-| open path | later  | open a folder/file on Windows   |
+| Tool | Status | What it does |
+|------|--------|--------------|
+| save note | done | append text to `data/notes.txt` |
+| reminder | done | store `when \| text` in `data/reminders.txt` |
+| open path | done | open a folder/file on Windows |
 
 
 
