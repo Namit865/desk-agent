@@ -8,10 +8,12 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 
 v1 core is working:
 
-- Tools: `save_note`, `set_reminder`, `open_path`
+- Tools: `save_note`, `set_reminder`, `open_path`, `deep_research`
 - Agent loop: Gemini/Ollama plans JSON → registry runs tools → repeats until `done`
 - Brain: try **Gemini** first; on failure fall back to **Ollama** (`llama3.2` local)
 - CLI: `python main.py` — type a request, or `exit` to quit
+- Research: `ddgs` search → fetch (skip failures) → conclude append → final answer; wired as one tool `deep_research`
+- Next: “enough?” stop rule; then better Windows reminders
 
 ## What it does (v1)
 
@@ -63,6 +65,7 @@ desk-agent/
 | save note | done | append text to `data/notes.txt` |
 | reminder | done | store `when \| text` in `data/reminders.txt` |
 | open path | done | open a folder/file on Windows |
+| deep research | done | search → fetch sites → conclusions → final answer |
 
 ## Stack
 

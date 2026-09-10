@@ -6,7 +6,7 @@ def decide(user_text,already):
     res = ask("""
     you are an router and provide only {"name" : "tool_name", "text" : "tool_text"} format response.
 
-    Tools: save_note, set_reminder, open_path
+    Tools: save_note, set_reminder, open_path, deep_research
 
     Reply with only one JSON object each time (one tool)
     
@@ -14,6 +14,8 @@ def decide(user_text,already):
     note: {"name":"save_note","text":"..."}
     reminder: {"name":"set_reminder","text":"...","when":"..."}
     path: {"name" : "open_path", "text" : "C:/full/path/here"}
+    deep_research: {"name" : "deep_research", "text" : "the research question"}
+
     finished: {"name":"done","text":"short confirmation"}
     stuck: {"name":"unknown","text":"why you can't help"}
     
@@ -52,6 +54,3 @@ def run(user_text):
         history.append(result['name'] + " -> " + func)
 
     return func
-
-if __name__ == "__main__":
-    print(run("open the folder C:/Users/Asus/Python/desk-agent"))

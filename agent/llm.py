@@ -14,7 +14,7 @@ client = genai.Client(api_key=api_key)
 
 def ask_cloud(prompt):
     response = client.models.generate_content(
-        model = "gemini-3.6-flash",
+        model = "gemini-3.1-flash-lite",
         contents = prompt,
     )
 
@@ -24,7 +24,7 @@ def ask_local(prompt):
     url = "http://localhost:11434/api/generate"
 
     payload = {
-        "model" : "llama3.2", ergh
+        "model" : "llama3.2",
         "prompt" : prompt,
         "stream" : False,
     }
@@ -42,7 +42,7 @@ def ask(prompt):
         return ask_cloud(prompt)
     except Exception as e:
         print("Cloud failed, using local:",e)
-        return ask_local(prompt)
+        return ask_local(prompt) if ask_local else "Local LLM failed, please start the local LLM server."
 
 if __name__ == "__main__":
     print(ask_local("Say hello in one short sentence."))

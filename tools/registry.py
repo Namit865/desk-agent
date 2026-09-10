@@ -1,6 +1,7 @@
 from tools.notes import save_note
 from tools.reminder import set_reminder
 from tools.files import open_path
+from tools.research import run_research
 
 tools = {
     "save_note" : {
@@ -17,6 +18,11 @@ tools = {
         "description" : "Open a path in the file explorer",
         "parameters" : "text",
         "function" : open_path
+    },
+    "deep_research" : {
+        "description" : "Deep research on the given question",
+        "parameters" : "text",
+        "function" : run_research
     }
 }
 
