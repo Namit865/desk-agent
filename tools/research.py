@@ -2,6 +2,7 @@ import re
 import requests
 from agent.llm import ask
 from ddgs import DDGS
+from pathlib import Path
 
 def fetch_url(url):
     response = requests.get(url,timeout=20,headers = {"User-Agent": "Mozilla/5.0"})
@@ -61,15 +62,18 @@ def is_enough(question):
 
     cleaned = response.strip().lower()
 
+    if "need more" in cleaned:
+        return "need more"
+
     if "enough" in cleaned:
         return "enough"
     
-    if "need more" in cleaned:
-        return "need more"
-    
-    return "need more"
+    return "Research is enough"
 
 def final_research(question):
+    history_path = Path("data/history/saved_research.txt")
+    history_path.parent.mkdir(parents=True,exist_ok=True)
+
     with open("data/research/conclusion.txt",encoding="utf-8",mode="r") as f:
         conclusion = f.read()
 
@@ -84,13 +88,13 @@ def final_research(question):
     provide the user's question + answer.
     """)
 
-    with open("data/history/saved_research.txt",encoding="utf-8",mode="a") as f:
+    with history_path.open(encoding="utf-8",mode="a") as f:
         f.write(response + "\n\n")
 
     with open("data/research/final_research.txt",encoding="utf-8",mode="w") as f:
         f.write(response + "\n\n")
 
-    return "Research completed and saved to final_research.txt"
+    return response
 
 def clear_research_files():
     with open("data/research/conclusion.txt",encoding="utf-8",mode="w") as f:

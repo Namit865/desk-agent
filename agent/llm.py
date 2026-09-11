@@ -36,7 +36,7 @@ def ask_cloud(prompt):
             return response.text
 
         except (APIError,ServerError) as e:
-            if hasattr(e,"code") and e.code in [429,503]:
+            if hasattr(e,"code") and e.code in [429,404,503]:
                 print(f"⚠️ {model} failed with code {e.code} ({e.message}). Trying next available model...")
                 continue
             raise e
@@ -62,10 +62,12 @@ def ask_local(prompt):
 
 def ask(prompt):
     try:
-        return ask_cloud(prompt)
+        response = ask_cloud(prompt)
+        return response
     except Exception as e:
         print("Cloud failed, using local:",e)
-        return ask_local(prompt) if ask_local else "Local LLM failed, please start the local LLM server."
+        response = ask_local(prompt)
+        return response if response else "Local LLM failed, please start the local LLM server."
 
 if __name__ == "__main__":
     print(ask_local("Say hello in one short sentence."))

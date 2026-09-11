@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 def open_path(path):
-    open_path = os.startfile(path)
+    os.startfile(path)
     folder_name = Path(path).name
     return f"opened {folder_name}"
 

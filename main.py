@@ -1,5 +1,4 @@
 from agent.loop import run
-from tools.research import run_research
 
 while True:
     print("type a request, or 'exit' to quit")

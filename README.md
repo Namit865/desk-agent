@@ -9,19 +9,22 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 v1 core is working:
 
 - Tools: `save_note`, `set_reminder`, `open_path`, `deep_research`
-- Agent loop: Gemini/Ollama plans JSON → registry runs tools → repeats until `done`
-- Brain: try **Gemini** first; on failure fall back to **Ollama** (`llama3.2` local)
+- Agent loop: Gemini/Ollama plans JSON → registry runs tools → repeats until `done` (research returns after one call)
+- Brain: try **Gemini** first (several model IDs, retry on quota/errors); on failure fall back to **Ollama** (`llama3.2` local)
 - CLI: `python main.py` — type a request, or `exit` to quit
-- Research: `ddgs` search → fetch (skip failures) → conclude append → final answer; wired as one tool `deep_research`
-- Next: “enough?” stop rule; then better Windows reminders
+- Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
+- Next: better Windows reminders; harden bad JSON / mid-loop errors
 
 ## What it does (v1)
 
 - Save notes → `data/notes.txt`
 - Set reminders → `data/reminders.txt`
 - Open a folder or file on Windows
+- Deep research a topic → `data/research/` + history under `data/history/`
 
 Example: *"save a note that I need to call mom and remind me at 6pm"* → note tool + reminder tool → short confirmation.
+
+Example: *"research a PyTorch learning roadmap from math basics"* → `deep_research` → final answer in the terminal / `final_research.txt`.
 
 ## How to run
 
@@ -40,22 +43,24 @@ python main.py
 
 Type a normal-language request. Type `exit` to quit.
 
-(You can still run `python -m agent.loop` for a hardcoded one-shot test.)
-
 ## Project layout
 
 ```
 desk-agent/
   main.py          # type requests here
   agent/
-    llm.py         # ask(): Gemini, then Ollama fallback
+    llm.py         # ask(): Gemini multi-model retry, then Ollama fallback
     loop.py        # decide → tools → history → done
   tools/
     registry.py    # tool menu + lookup
     notes.py
     reminder.py
     files.py       # open_path
-  data/            # notes.txt, reminders.txt
+    research.py    # deep_research pipeline
+  data/
+    notes.txt, reminders.txt
+    research/      # site_contents, conclusion, final_research (runtime)
+    history/       # saved research answers (runtime)
 ```
 
 ## Tools (v1)
@@ -65,10 +70,11 @@ desk-agent/
 | save note | done | append text to `data/notes.txt` |
 | reminder | done | store `when \| text` in `data/reminders.txt` |
 | open path | done | open a folder/file on Windows |
-| deep research | done | search → fetch sites → conclusions → final answer |
+| deep research | done | search → fetch sites → conclusions → enough? → final answer |
 
 ## Stack
 
 - Python
-- LLM: Gemini API (primary) + Ollama local (fallback)
+- LLM: Gemini API (primary, multi-model retry) + Ollama local (fallback)
+- Web search: `ddgs`
 - Tools: normal Python functions via a registry
