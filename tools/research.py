@@ -67,8 +67,8 @@ def is_enough(question):
 
     if "enough" in cleaned:
         return "enough"
-    
-    return "Research is enough"
+
+    return "need more"
 
 def final_research(question):
     history_path = Path("data/history/saved_research.txt")
