@@ -42,8 +42,32 @@ def summarize_site_contents(question):
 def append_conclusion(summary):
     with open("data/research/conclusion.txt",encoding="utf-8",mode="a") as f:
         f.write(summary + "\n")
+
+    return f"Conclusion appended {len(summary)} chars"
+
+def is_enough(question):
+    with open("data/research/conclusion.txt",encoding="utf-8",mode="r") as f:
+        conclusion = f.read()
+
+    response = ask(f"""
+    You are a helpful assistant that summarizes the contents of a website.
+    look at the question: {question},
+    and the current conclusion is: {conclusion}
+
+    you are asked to understand the question and the current conclusion is considered as deep research enough or not.
+    if the conclusion is not deep research enough, say just word "need more" which means we need more research else return word "enough" only.
     
-    return f"Appended conclusion {len(summary)} chars"
+    """)
+
+    cleaned = response.strip().lower()
+
+    if "enough" in cleaned:
+        return "enough"
+    
+    if "need more" in cleaned:
+        return "need more"
+    
+    return "need more"
 
 def final_research(question):
     with open("data/research/conclusion.txt",encoding="utf-8",mode="r") as f:
@@ -69,7 +93,6 @@ def final_research(question):
     return "Research completed and saved to final_research.txt"
 
 def clear_research_files():
-
     with open("data/research/conclusion.txt",encoding="utf-8",mode="w") as f:
         f.write("")
     
@@ -98,8 +121,13 @@ def run_research(question):
         except Exception as e:
             print(f"Error fetching URL {link}: {e}")
             continue
-
         summary = summarize_site_contents(question)
         append_conclusion(summary)
+
+        deep_enough = is_enough(question)
+        print(deep_enough)
+
+        if deep_enough == "enough":
+            break
 
     return final_research(question)

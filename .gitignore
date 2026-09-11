@@ -2,3 +2,5 @@
 __pycache__/
 .cursor/rules
 .env
+data/history
+data/research

@@ -20,6 +20,10 @@ def decide(user_text,already):
     stuck: {"name":"unknown","text":"why you can't help"}
     
     If the user asked for two things, do one now; the next round will do the other
+    deep_research runs the FULL research pipeline by itself.
+    Call deep_research at most ONCE per user request.
+    If history already shows deep_research, reply with done and put the research result (or a short confirmation) in text.
+    Do not call deep_research again for the same request.
 
     User asked this question:
     """ + user_text + "already present:" + already)
@@ -50,6 +54,9 @@ def run(user_text):
                     func = tool['function'](result['text'])
             else:
                 func = tool['function'](result['text'])
+
+            if result['name'] == "deep_research":
+                return func
         
         history.append(result['name'] + " -> " + func)
 
