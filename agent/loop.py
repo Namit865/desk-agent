@@ -3,7 +3,7 @@ from agent.llm import ask
 import json
 from datetime import datetime
 
-def decide(user_text,already,now_str):
+def decide(user_text,already):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     res = ask("""
@@ -45,7 +45,7 @@ def run(user_text):
     for i in range(5):
         already = ", ".join(history)
 
-        result = decide(user_text, already,now_str)
+        result = decide(user_text, already)
 
         if result['name'] == "done":
             return result.get('text')

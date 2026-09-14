@@ -28,7 +28,6 @@ def show_reminder(text):
         from win11toast import notify
         notify("Desk Agent", f"Reminder: {text}", icon=image_path)
     elif system == "Darwin":
-        # Darwin = macOS. osascript is built into Mac — no extra package.
         safe_text = text.replace("\\", "\\\\").replace('"', '\\"')
         script = f'display notification "{safe_text}" with title "Desk Agent"'
         subprocess.run(["osascript", "-e", script], check=False)
@@ -38,4 +37,4 @@ def show_reminder(text):
     return f"Reminder shown: {text}"
 
 if __name__ == "__main__":
-    print(set_reminder("Test: Remember to buy milk","2026-09-11 17:03:00"))
+    print(set_reminder("Test: Remember to buy milk","2026-09-11 17:30:00"))
