@@ -1,8 +1,11 @@
 from tools.registry import get_tool
 from agent.llm import ask
 import json
+from datetime import datetime
 
-def decide(user_text,already):
+def decide(user_text,already,now_str):
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
     res = ask("""
     you are an router and provide only {"name" : "tool_name", "text" : "tool_text"} format response.
 
@@ -12,7 +15,7 @@ def decide(user_text,already):
     
     Formats:
     note: {"name":"save_note","text":"..."}
-    reminder: {"name":"set_reminder","text":"...","when":"..."}
+    reminder: {"name":"set_reminder","text":"...","when":"YYYY-MM-DD HH:MM:SS"}
     path: {"name" : "open_path", "text" : "C:/full/path/here"}
     deep_research: {"name" : "deep_research", "text" : "the research question"}
 
@@ -22,11 +25,15 @@ def decide(user_text,already):
     If the user asked for two things, do one now; the next round will do the other
     deep_research runs the FULL research pipeline by itself.
     Call deep_research at most ONCE per user request.
+    
+    For set_reminder, "when" MUST be absolute: YYYY-MM-DD HH:MM:SS
+    If user says "in 20 seconds" or "at 6pm", convert using current local time.
+
     If history already shows deep_research, reply with done and put the research result (or a short confirmation) in text.
     Do not call deep_research again for the same request.
 
     User asked this question:
-    """ + user_text + "already present:" + already)
+    """ + user_text + "already present:" + f"Current local time is: {now_str}" + already)
 
     final_res = json.loads(res)
     print(final_res)
@@ -38,7 +45,7 @@ def run(user_text):
     for i in range(5):
         already = ", ".join(history)
 
-        result = decide(user_text, already)
+        result = decide(user_text, already,now_str)
 
         if result['name'] == "done":
             return result.get('text')
