@@ -13,15 +13,15 @@ v1 core is working:
 - Brain: try **Gemini** first (several model IDs, retry on quota/errors); on failure fall back to **Ollama** (`llama3.2` local)
 - CLI: `python main.py` — type a request, or `exit` to quit
 - Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
-- Reminders: save to disk + OS notification (Windows toast / macOS `osascript`); wait runs in a **background thread** so the agent does not freeze
+- Reminders: save to disk + schedule a **detached OS process** that notifies later (macOS `osascript` delay, Windows detached Python + `win11toast`, Linux `notify-send`) — survives quitting the agent
 - Open path: Windows `os.startfile` / macOS `open` (same tool, OS branch)
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`
-- Next: small polish (requirements note for Windows-only `win11toast`); then optional portfolio extras
+- Next: optional portfolio extras (demo script, more tools)
 
 ## What it does (v1)
 
 - Save notes → `data/notes.txt`
-- Set reminders → `data/reminders.txt` + native OS notification
+- Set reminders → `data/reminders.txt` + native OS notification (still fires after you quit `main.py`)
 - Open a folder or file (Finder on Mac, Explorer on Windows)
 - Deep research a topic → `data/research/` + history under `data/history/`
 
@@ -59,7 +59,7 @@ desk-agent/
   tools/
     registry.py    # tool menu + lookup
     notes.py
-    reminder.py    # Mac + Windows notify; background wait
+    reminder.py    # schedule detached OS notify (Mac / Windows / Linux)
     files.py       # open_path (Mac + Windows)
     research.py    # deep_research pipeline
   data/
@@ -73,7 +73,7 @@ desk-agent/
 | Tool | Status | What it does |
 |------|--------|--------------|
 | save note | done | append text to `data/notes.txt` |
-| reminder | done | store `when \| text`; notify later (Mac/Windows); non-blocking |
+| reminder | done | store `when \| text`; detached OS process notifies later (survives quit) |
 | open path | done | open a folder/file (Mac Finder / Windows Explorer) |
 | deep research | done | search → fetch sites → conclusions → enough? → final answer |
 

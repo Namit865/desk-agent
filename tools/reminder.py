@@ -4,6 +4,7 @@ import platform
 import subprocess
 import time
 import threading
+import sys
 
 base_dir = Path(__file__).parent.parent
 
@@ -18,12 +19,7 @@ def set_reminder(text,when):
 
     if when_time > now:
         seconds = (when_time - now).total_seconds()
-
-        def wait_and_show():
-            time.sleep(seconds)
-            show_reminder(text)
-
-        threading.Thread(target=wait_and_show,daemon=True).start()
+        schedule_reminder(text,seconds)
 
     return f"Reminder set for {when}: {text} successfully"
 
@@ -42,5 +38,31 @@ def show_reminder(text):
 
     return f"Reminder shown: {text}"
 
+def schedule_reminder(text,seconds):
+
+    system = platform.system()
+    if system == "Darwin":
+        safe_text = text.replace("\\", "\\\\").replace('"', '\\"')
+        script = f'delay {int(seconds)}\ndisplay notification "{safe_text}" with title "Desk Agent"'
+
+        subprocess.Popen(["osascript", "-e", script],start_new_session=True)
+
+    elif system == "Windows":
+        safe_text = text.replace("\\", "\\\\").replace("'", "\\'")
+        code = (
+            "import time\n"
+            f"time.sleep({seconds})\n"
+            "from win11toast import notify\n"
+            f"notify('Desk Agent', 'Reminder: {safe_text}')\n"
+        )
+
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        subprocess.Popen([sys.executable, "-c", code], creationflags=flags,close_fds=True)
+
+    else:
+        safe_text = text.replace("\\", "\\\\").replace('"', '\\"')
+        cmd = f"sleep {seconds}; notify-send 'Desk Agent' 'Reminder: {safe_text}' || echo 'Reminder: {safe_text}'"
+        subprocess.Popen(cmd,shell=True,start_new_session=True)
+
 if __name__ == "__main__":
-    print(set_reminder("Test: Remember to buy milk","2026-09-11 17:30:00"))
+    print(set_reminder("Test: Remember to buy milk","2026-09-14 15:08:00"))

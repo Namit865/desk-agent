@@ -2,4 +2,4 @@ google-genai
 python-dotenv
 requests
 ddgs
-win11toast
+win11toast # only for windows users
