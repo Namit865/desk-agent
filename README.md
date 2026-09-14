@@ -1,6 +1,6 @@
 # Desk Agent
 
-Windows GenAI desk agent: you speak or type in normal language → an LLM understands the request → it calls tools (normal Python functions) on your PC → runs a small loop until that request is done → short confirmation.
+Cross-platform GenAI desk agent (macOS + Windows): you speak or type in normal language → an LLM understands the request → it calls tools (normal Python functions) on your PC → runs a small loop until that request is done → short confirmation.
 
 Not a chatbot that only answers. Not training an LLM from scratch. The engine is general (LLM + tools). v1 tools are limited on purpose.
 
@@ -13,13 +13,15 @@ v1 core is working:
 - Brain: try **Gemini** first (several model IDs, retry on quota/errors); on failure fall back to **Ollama** (`llama3.2` local)
 - CLI: `python main.py` — type a request, or `exit` to quit
 - Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
-- Next: better Windows reminders; harden bad JSON / mid-loop errors
+- Reminders: save to disk + OS notification (Windows toast / macOS `osascript`); wait runs in a **background thread** so the agent does not freeze
+- Open path: Windows `os.startfile` / macOS `open` (same tool, OS branch)
+- Next: harden bad JSON / mid-loop errors so `main.py` does not die
 
 ## What it does (v1)
 
 - Save notes → `data/notes.txt`
-- Set reminders → `data/reminders.txt`
-- Open a folder or file on Windows
+- Set reminders → `data/reminders.txt` + native OS notification
+- Open a folder or file (Finder on Mac, Explorer on Windows)
 - Deep research a topic → `data/research/` + history under `data/history/`
 
 Example: *"save a note that I need to call mom and remind me at 6pm"* → note tool + reminder tool → short confirmation.
@@ -32,10 +34,12 @@ Example: *"research a PyTorch learning roadmap from math basics"* → `deep_rese
 pip install -r requirements.txt
 ```
 
+On **macOS**, `win11toast` is Windows-only — if install fails, skip it or install the other packages individually. Reminder notifications on Mac use built-in `osascript` (no extra package).
+
 **LLM setup**
 
-- **Cloud (preferred):** set Windows env var `GEMINI_API_KEY` (or put it in `.env` — see `.env.example`). Never commit `.env`.
-- **Local fallback:** install [Ollama](https://ollama.com), pull a model (`ollama pull llama3.2`), leave Ollama running. Used automatically if Gemini fails.
+- **Cloud (preferred):** set `GEMINI_API_KEY` in your environment or in `.env` (see `.env.example`). Never commit `.env`.
+- **Local fallback:** install [Ollama](https://ollama.com), pull a model (`ollama pull llama3.2`), leave Ollama running (`ollama serve` or the Ollama app). Used automatically if Gemini fails.
 
 ```text
 python main.py
@@ -54,8 +58,8 @@ desk-agent/
   tools/
     registry.py    # tool menu + lookup
     notes.py
-    reminder.py
-    files.py       # open_path
+    reminder.py    # Mac + Windows notify; background wait
+    files.py       # open_path (Mac + Windows)
     research.py    # deep_research pipeline
   data/
     notes.txt, reminders.txt
@@ -68,8 +72,8 @@ desk-agent/
 | Tool | Status | What it does |
 |------|--------|--------------|
 | save note | done | append text to `data/notes.txt` |
-| reminder | done | store `when \| text` in `data/reminders.txt` |
-| open path | done | open a folder/file on Windows |
+| reminder | done | store `when \| text`; notify later (Mac/Windows); non-blocking |
+| open path | done | open a folder/file (Mac Finder / Windows Explorer) |
 | deep research | done | search → fetch sites → conclusions → enough? → final answer |
 
 ## Stack
@@ -78,3 +82,4 @@ desk-agent/
 - LLM: Gemini API (primary, multi-model retry) + Ollama local (fallback)
 - Web search: `ddgs`
 - Tools: normal Python functions via a registry
+- OS: macOS + Windows (notify / open path branched by platform)
