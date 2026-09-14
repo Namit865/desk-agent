@@ -16,7 +16,7 @@ def decide(user_text,already):
     Formats:
     note: {"name":"save_note","text":"..."}
     reminder: {"name":"set_reminder","text":"...","when":"YYYY-MM-DD HH:MM:SS"}
-    path: {"name" : "open_path", "text" : "C:/full/path/here"}
+    path: {"name" : "open_path", "text" : "/full/path/here"}
     deep_research: {"name" : "deep_research", "text" : "the research question"}
 
     finished: {"name":"done","text":"short confirmation"}
@@ -35,7 +35,14 @@ def decide(user_text,already):
     User asked this question:
     """ + user_text + "already present:" + f"Current local time is: {now_str}" + already)
 
-    final_res = json.loads(res)
+    try:
+        final_res = json.loads(res)
+    except json.JSONDecodeError:
+        print(f"Bad Json from model: {res}")
+
+        return {"name":"unknown","text":"I got bad reply from model. Please try again."}
+
+
     print(final_res)
     return final_res
 
@@ -47,6 +54,9 @@ def run(user_text):
 
         result = decide(user_text, already)
 
+        if not isinstance(result, dict) or "name" not in result:
+            return "I got an incomplete reply from model. Please try again."
+
         if result['name'] == "done":
             return result.get('text')
 
@@ -54,17 +64,20 @@ def run(user_text):
         if tool is None or result['name'] == "unknown":
             return result.get('text')
         else:
-            if result.get('when') is not None:
-                if result['name'] == "set_reminder":
-                    func = tool['function'](result['text'],result.get('when'))
+            try:
+                if result.get('when') is not None:
+                    if result['name'] == "set_reminder":
+                        func = tool['function'](result['text'],result.get('when'))
+                    else:
+                        func = tool['function'](result['text'])
                 else:
                     func = tool['function'](result['text'])
-            else:
-                func = tool['function'](result['text'])
 
-            if result['name'] == "deep_research":
-                return func
-        
+                if result['name'] == "deep_research":
+                    return func
+            except Exception as e:
+                return f"Error calling tool: {e}"
+
         history.append(result['name'] + " -> " + func)
 
     return func

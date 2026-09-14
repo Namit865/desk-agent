@@ -15,7 +15,8 @@ v1 core is working:
 - Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
 - Reminders: save to disk + OS notification (Windows toast / macOS `osascript`); wait runs in a **background thread** so the agent does not freeze
 - Open path: Windows `os.startfile` / macOS `open` (same tool, OS branch)
-- Next: harden bad JSON / mid-loop errors so `main.py` does not die
+- Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`
+- Next: small polish (requirements note for Windows-only `win11toast`); then optional portfolio extras
 
 ## What it does (v1)
 
