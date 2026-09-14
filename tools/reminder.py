@@ -3,6 +3,7 @@ from datetime import datetime
 import platform
 import subprocess
 import time
+import threading
 
 base_dir = Path(__file__).parent.parent
 
@@ -16,9 +17,14 @@ def set_reminder(text,when):
     when_time = datetime.strptime(when, "%Y-%m-%d %H:%M:%S")
 
     if when_time > now:
-        time.sleep((when_time - now).total_seconds())
-        show_reminder(text)
-        
+        seconds = (when_time - now).total_seconds()
+
+        def wait_and_show():
+            time.sleep(seconds)
+            show_reminder(text)
+
+        threading.Thread(target=wait_and_show,daemon=True).start()
+
     return f"Reminder set for {when}: {text} successfully"
 
 def show_reminder(text):
