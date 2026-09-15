@@ -3,3 +3,4 @@ python-dotenv
 requests
 ddgs
 win11toast # only for windows users
+groq

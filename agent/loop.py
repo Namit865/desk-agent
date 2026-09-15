@@ -24,6 +24,9 @@ def decide(user_text,already):
         4. Two user asks → do the next unfinished one only.
         5. deep_research at most once. If it is already in Already used tools, reply done.
         6. If you cannot follow these shapes, reply unknown.
+        7. use tools only when the user wants a side effect (save, remind, open, research)
+        8. If they are chatting or asking for an explaination, use done and write a clear helpful answer in text.
+        9. Stay short unless they ask for details.
 
     User asked this question:
     """ + user_text + "already present:" + f"Current local time is: {now_str}\n" + "Already used tools: " + already)
