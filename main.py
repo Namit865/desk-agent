@@ -24,7 +24,7 @@ while True:
         user_text = listen_once()
         print("You said: ",user_text)
 
-        if user_text.lower() == "text":
+        if user_text.strip().lower().strip(".,!?") == "text":
             mode = "text"
             print("Text mode on.")
             continue
