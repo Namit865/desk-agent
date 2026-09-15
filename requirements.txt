@@ -4,3 +4,6 @@ requests
 ddgs
 win11toast # only for windows users
 groq
+SpeechRecognition
+pyaudio
+piper-tts

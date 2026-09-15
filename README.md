@@ -13,11 +13,12 @@ v1 core is working:
 - Brain: **Groq first** → **Ollama** (`qwen2.5:14b`) if Groq fails; Gemini helpers remain in code but are not in the default `ask()` chain
 - CLI: `python main.py` — type a request, or `exit` to quit
 - Chat: if no tool is needed, router returns `done` with a normal helpful answer (not tools-only)
+- Voice: type `listen` for mic mode (Groq Whisper → same `run` loop); say `text` to return to keyboard; Piper TTS speaks every agent reply
 - Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
 - Reminders: save to disk + schedule a **detached OS process** that notifies later (macOS `osascript` delay, Windows detached Python + `win11toast`, Linux `notify-send`) — survives quitting the agent
 - Open path: Windows `os.startfile` / macOS `open` (same tool, OS branch)
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`
-- Next: voice input (`tools/voice.py`) — listen → text → same agent loop
+- Next: optional portfolio extras; polish voice (errors, faster Piper load)
 
 ## What it does (v1)
 
@@ -51,7 +52,7 @@ On **macOS**, `win11toast` is Windows-only — if install fails, skip it or inst
 python main.py
 ```
 
-Type a normal-language request. Type `exit` to quit.
+Type a normal-language request. Type `listen` for voice mode, say `text` to switch back. Type `exit` to quit. Agent replies are printed and spoken (Piper).
 
 ## Project layout
 
@@ -67,6 +68,9 @@ desk-agent/
     reminder.py    # schedule detached OS notify (Mac / Windows / Linux)
     files.py       # open_path (Mac + Windows)
     research.py    # deep_research pipeline
+    voice.py       # listen_once (Groq Whisper) + speak (Piper TTS)
+  assets/
+    voices/        # Piper .onnx voice files (local; usually gitignored)
   data/
     notes.txt, reminders.txt
     research/      # site_contents, conclusion, final_research (runtime)
