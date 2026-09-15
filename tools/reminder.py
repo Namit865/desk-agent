@@ -2,8 +2,6 @@ from pathlib import Path
 from datetime import datetime
 import platform
 import subprocess
-import time
-import threading
 import sys
 
 base_dir = Path(__file__).parent.parent
@@ -63,6 +61,3 @@ def schedule_reminder(text,seconds):
         safe_text = text.replace("\\", "\\\\").replace('"', '\\"')
         cmd = f"sleep {seconds}; notify-send 'Desk Agent' 'Reminder: {safe_text}' || echo 'Reminder: {safe_text}'"
         subprocess.Popen(cmd,shell=True,start_new_session=True)
-
-if __name__ == "__main__":
-    print(set_reminder("Test: Remember to buy milk","2026-09-14 15:08:00"))

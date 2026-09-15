@@ -7,33 +7,26 @@ def decide(user_text,already):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     res = ask("""
-    you are an router and provide only {"name" : "tool_name", "text" : "tool_text"} format response.
-
-    Tools: save_note, set_reminder, open_path, deep_research
-
-    Reply with only one JSON object each time (one tool)
-    
-    Formats:
-    note: {"name":"save_note","text":"..."}
-    reminder: {"name":"set_reminder","text":"...","when":"YYYY-MM-DD HH:MM:SS"}
-    path: {"name" : "open_path", "text" : "/full/path/here"}
-    deep_research: {"name" : "deep_research", "text" : "the research question"}
-
-    finished: {"name":"done","text":"short confirmation"}
-    stuck: {"name":"unknown","text":"why you can't help"}
-    
-    If the user asked for two things, do one now; the next round will do the other
-    deep_research runs the FULL research pipeline by itself.
-    Call deep_research at most ONCE per user request.
-    
-    For set_reminder, "when" MUST be absolute: YYYY-MM-DD HH:MM:SS
-    If user says "in 20 seconds" or "at 6pm", convert using current local time.
-
-    If history already shows deep_research, reply with done and put the research result (or a short confirmation) in text.
-    Do not call deep_research again for the same request.
+        You are a JSON tool router. Output ONE JSON object only. No markdown. No extra words.
+        
+        Tools and exact shapes:
+        {"name":"save_note","text":"note content"}
+        {"name":"set_reminder","text":"what to remind","when":"YYYY-MM-DD HH:MM:SS"}
+        {"name":"open_path","text":"/full/path"}
+        {"name":"deep_research","text":"research question"}
+        {"name":"done","text":"short confirmation"}
+        {"name":"unknown","text":"why you cannot help"}
+        
+        Rules:
+        1. Choose exactly one tool per reply.
+        2. Use Current local time to turn relative times ("in 30 seconds", "in 2 minutes", "at 6pm") into absolute when. For set_reminder, when is required. Never put "in 30 seconds" only in text.
+        3. If Already used tools shows the needed tool is finished, reply done. Do not call the same tool again for the same request.
+        4. Two user asks → do the next unfinished one only.
+        5. deep_research at most once. If it is already in Already used tools, reply done.
+        6. If you cannot follow these shapes, reply unknown.
 
     User asked this question:
-    """ + user_text + "already present:" + f"Current local time is: {now_str}" + already)
+    """ + user_text + "already present:" + f"Current local time is: {now_str}\n" + "Already used tools: " + already)
 
     try:
         final_res = json.loads(res)
@@ -51,6 +44,8 @@ def run(user_text):
 
     for i in range(5):
         already = ", ".join(history)
+
+        print(f"Already used tools: {already} - iter {i}")
 
         result = decide(user_text, already)
 

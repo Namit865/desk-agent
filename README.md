@@ -9,8 +9,8 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 v1 core is working:
 
 - Tools: `save_note`, `set_reminder`, `open_path`, `deep_research`
-- Agent loop: Gemini/Ollama plans JSON → registry runs tools → repeats until `done` (research returns after one call)
-- Brain: try **Gemini** first (several model IDs, retry on quota/errors); on failure fall back to **Ollama** (`llama3.2` local)
+- Agent loop: local LLM plans JSON → registry runs tools → repeats until `done` (research returns after one call)
+- Brain: **Ollama local-first** (`qwen2.5:14b`); optional **Gemini** cloud only if local fails
 - CLI: `python main.py` — type a request, or `exit` to quit
 - Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
 - Reminders: save to disk + schedule a **detached OS process** that notifies later (macOS `osascript` delay, Windows detached Python + `win11toast`, Linux `notify-send`) — survives quitting the agent
@@ -39,8 +39,8 @@ On **macOS**, `win11toast` is Windows-only — if install fails, skip it or inst
 
 **LLM setup**
 
-- **Cloud (preferred):** set `GEMINI_API_KEY` in your environment or in `.env` (see `.env.example`). Never commit `.env`.
-- **Local fallback:** install [Ollama](https://ollama.com), pull a model (`ollama pull llama3.2`), leave Ollama running (`ollama serve` or the Ollama app). Used automatically if Gemini fails.
+- **Local (preferred):** install [Ollama](https://ollama.com), pull `qwen2.5:14b` (`ollama pull qwen2.5:14b`), leave Ollama running (`ollama serve` or the Ollama app).
+- **Cloud (optional backup):** set `GEMINI_API_KEY` in your environment or in `.env` (see `.env.example`) if you want Gemini when local fails. Never commit `.env`. Small local models (2B/3B) are poor at JSON tool routing; 8B/14B recommended.
 
 ```text
 python main.py
@@ -80,7 +80,7 @@ desk-agent/
 ## Stack
 
 - Python
-- LLM: Gemini API (primary, multi-model retry) + Ollama local (fallback)
+- LLM: Ollama local-first (`qwen2.5:14b`) + optional Gemini backup
 - Web search: `ddgs`
 - Tools: normal Python functions via a registry
 - OS: macOS + Windows (notify / open path branched by platform)

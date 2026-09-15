@@ -3,42 +3,23 @@ from dotenv import load_dotenv
 from google import genai
 import requests
 from google.genai.errors import APIError, ServerError
-import random
 
 load_dotenv()
 
 api_key = os.environ.get("GEMINI_API_KEY")
 
-if not api_key:
-    raise ValueError("GEMINI_API_KEY is missing from environment or .env file")
-
 client = genai.Client(api_key=api_key)
 
 def ask_cloud(prompt):
-    models = [
-        "gemini-2.5-flash",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-3.1-flash-lite",
-        "gemini-3.1-pro-preview",
-        "gemini-3.5-flash-lite",
-        "gemini-3.8-flash"
-    ]
-    random.shuffle(models)
-    
-    for model in models:
-        try:
-            response = client.models.generate_content(
-                model = model,
-                contents = prompt,
-            )
+    try:
+        response = client.models.generate_content(
+            model = "gemini-3.8-flash",
+            contents = prompt,
+        )
+        return response.text
 
-            return response.text
-
-        except (APIError,ServerError) as e:
-            if hasattr(e,"code") and e.code in [429,404,503]:
-                print(f"⚠️ {model} failed with code {e.code} ({e.message}). Trying next available model...")
-                continue
+    except (APIError,ServerError) as e:
+        if hasattr(e,"code") and e.code in [429,404,503]:
             raise e
         
     raise RuntimeError("All models failed to generate a response.")
@@ -47,7 +28,7 @@ def ask_local(prompt):
     url = "http://localhost:11434/api/generate"
 
     payload = {
-        "model" : "llama3.2",
+        "model" : "qwen2.5:14b",
         "prompt" : prompt,
         "stream" : False,
     }
@@ -62,12 +43,12 @@ def ask_local(prompt):
 
 def ask(prompt):
     try:
-        response = ask_cloud(prompt)
-        return response
-    except Exception as e:
-        print("Cloud failed, using local:",e)
         response = ask_local(prompt)
         return response if response else "Local LLM failed, please start the local LLM server."
+    except Exception as e:
+        response = ask_cloud(prompt)
+        return response
+
 
 if __name__ == "__main__":
     print(ask_local("Say hello in one short sentence."))
