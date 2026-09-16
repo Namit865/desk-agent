@@ -7,10 +7,17 @@ import wave
 from piper import PiperVoice
 import platform
 import subprocess
+import select
+import sys
+import time
 from pathlib import Path
 
 base_dir = Path(__file__).parent.parent
 model_path = base_dir / "assets" / "voices" / "en_US-lessac-medium.onnx"
+
+piper_voice = PiperVoice.load(str(model_path))
+
+_play_proc = None
 
 load_dotenv()
 
@@ -25,17 +32,19 @@ else:
 def listen_once():
 
     recognizer = sr.Recognizer()
-    recognizer.energy_threshold = 300
     recognizer.dynamic_energy_threshold = True
-    recognizer.pause_threshold = 0.8
+    recognizer.pause_threshold = 1.5
 
-    with sr.Microphone(device_index=0,sample_rate=16000) as source:
+    with sr.Microphone() as source:
         print("Calibrating mic for background noise...")
         recognizer.adjust_for_ambient_noise(source,duration=1.0)
         print("Energy threshold set to: ",recognizer.energy_threshold)
         print("Listening...")
-        audio = recognizer.listen(source,timeout=5,phrase_time_limit=10)
-        recognizer.pause_threshold = 0.8
+
+        try:
+            audio = recognizer.listen(source,timeout=15,phrase_time_limit=30)
+        except sr.WaitTimeoutError:
+            return ""
 
     wav_path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
 
@@ -50,6 +59,7 @@ def listen_once():
             result = groq_client.audio.transcriptions.create(
                 file = f,
                 model = "whisper-large-v3",
+                language = "en",
             )
         
         return result.text
@@ -62,26 +72,59 @@ def speak(text):
     if not text:
         return
     
-    voice = PiperVoice.load(str(model_path))
     wav_path = tempfile.NamedTemporaryFile(suffix=".wav",delete = False).name
 
     try:
         with wave.open(wav_path,"wb") as wav_file:
-            voice.synthesize_wav(text,wav_file)
+            piper_voice.synthesize_wav(text,wav_file)
 
         system = platform.system()
 
+        global _play_proc
+        stop_speaking()
+
         if system == "Darwin":
-            subprocess.run(["afplay",wav_path],check=False)
+            _play_proc = subprocess.Popen(["afplay",wav_path])
         elif system == "Windows":
             import winsound
             winsound.PlaySound(wav_path,winsound.SND_FILENAME)
+            return
         else:
-            subprocess.run(["aplay",wav_path],check=False)
+            _play_proc = subprocess.Popen(["aplay",wav_path])
     
+        print("Speaking... (press enter to skip)")
+        wait_for_playback()
+
     finally:
+        stop_speaking()
+
         if os.path.exists(wav_path):
             os.remove(wav_path)
+
+def wait_for_playback():
+    global _play_proc
+
+    if _play_proc is None:
+        return
+
+    can_watch_keys = sys.stdin.isatty()
+
+    while _play_proc.poll() is None:
+        if can_watch_keys and select.select([sys.stdin], [], [], 0.1)[0]:
+            sys.stdin.readline()
+            stop_speaking()
+            return
+
+        if not can_watch_keys:
+            time.sleep(0.1)
+
+    _play_proc = None
+
+def stop_speaking():
+    global _play_proc
+    if _play_proc is not None and _play_proc.poll() is None:
+        _play_proc.terminate()
+        _play_proc = None
 
 if __name__ == "__main__":
     print(sr.Microphone.list_microphone_names())

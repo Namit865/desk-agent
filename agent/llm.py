@@ -67,7 +67,7 @@ def ask_groq(prompt):
     
     response = groq_client.chat.completions.create(
         messages = [{"role" : "user","content" : prompt}],
-        model = "openai/gpt-oss-120b"
+        model = "openai/gpt-oss-120b",
     )
 
     return response.choices[0].message.content

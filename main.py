@@ -22,9 +22,16 @@ while True:
     else:
         print("Listening... (say 'text' to switch back)")
         user_text = listen_once()
+
+        if not user_text.strip():
+            print("Didn't catch that, listening again.")
+            continue
+
         print("You said: ",user_text)
 
-        if user_text.strip().lower().strip(".,!?") == "text":
+        spoken = user_text.strip().lower().strip(".,!?")
+
+        if len(spoken.split()) <= 3 and ("text" in spoken or "keyboard" in spoken):
             mode = "text"
             print("Text mode on.")
             continue
