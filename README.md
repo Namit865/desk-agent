@@ -16,7 +16,7 @@ v1 core is working:
 - Voice: type `listen` for mic mode (Groq Whisper, English-locked → same `run` loop); say `text` to return to keyboard; Piper TTS (loaded once) speaks every reply and Enter skips it mid-sentence; silence times out instead of crashing
 - Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
 - Reminders: save to disk + schedule a **detached OS process** that notifies later (macOS `osascript` delay, Windows detached Python + `win11toast`, Linux `notify-send`) — survives quitting the agent
-- Open by name: say `open downloads` or `open desk-agent` — no paths. Resolves in layers: known places (`Downloads`, `Desktop`, …) → literal path → Spotlight search on macOS, ranked by exact name, then shallowest, then most recent. Two folders with the same name means it lists them and asks instead of guessing
+- Open by name: say `open downloads` or `open desk-agent` — no paths. Resolves in layers: known places (`Downloads`, `Desktop`, …) → literal path → search. Search uses Spotlight on macOS and a depth-capped walk of the home folder elsewhere (also the macOS fallback when Spotlight finds nothing). Results are ranked by exact name, then shallowest, then most recent; two folders with the same name means it lists them and asks instead of guessing
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`
 - Next: daily use, then reboot-safe reminders or a non-CLI front door
 
@@ -26,7 +26,7 @@ v1 core is working:
 
 - Save notes → `data/notes.txt`
 - Set reminders → `data/reminders.txt` + native OS notification (still fires after you quit `main.py`)
-- Open a folder by name, not by path (search is macOS-only for now; Windows/Linux handle known places and full paths)
+- Open a folder by name, not by path (Spotlight on macOS, home-folder walk on Windows/Linux)
 - Deep research a topic → `data/research/` + history under `data/history/`
 - Normal questions / chat → answered in the terminal without forcing a tool
 
@@ -88,7 +88,7 @@ desk-agent/
 | ------------- | ------ | ----------------------------------------------------------------------- |
 | save note     | done   | append text to `data/notes.txt`                                         |
 | reminder      | done   | store `when \| text`; detached OS process notifies later (survives quit) |
-| open file     | done   | open a folder by name; asks when the name is ambiguous (macOS search) |
+| open file     | done   | open a folder by name; asks when the name is ambiguous                  |
 | deep research | done   | search → fetch sites → conclusions → enough? → final answer             |
 
 

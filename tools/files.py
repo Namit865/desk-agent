@@ -3,21 +3,9 @@ from pathlib import Path
 import platform
 import subprocess
 
-
-# def open_path(path):
-#     system = platform.system()
-
-#     if system == "Windows":
-#         os.startfile(path)
-
-#     elif system == "Darwin":
-#         subprocess.run(["open", path], check=False)
-
-#     else:
-#         subprocess.run(["xdg-open", path], check=False)
-
-#     folder_name = Path(path).name
-#     return f"opened {folder_name}"
+MAX_RESULTS = 30
+MAX_DEPTH = 6
+SKIP_DIRS = {"Library","node_modules","__pycache__","venv","site-packages","Applications"}
 
 def known_places():
     home = Path.home()
@@ -57,12 +45,6 @@ def open_in_explorer(path):
         subprocess.run(['xdg-open',str(path)],check=False)
 
 def open_file(name):
-    direct = Path(name).expanduser()
-
-    if direct.exists():
-        open_in_explorer(direct)
-        return f"opened {direct}"
-
     cleaned = clean_path(name)
     places = known_places()
 
@@ -71,41 +53,76 @@ def open_file(name):
 
         if not path.exists():
             return f"no such file or directory: {path}"
-        
+
         open_in_explorer(path)
         return f"opened {path}"
+
+    direct = Path(name).expanduser()
+
+    if direct.exists():
+        open_in_explorer(direct)
+        return f"opened {direct}"
 
     return ambiguous_answer(cleaned)
 
 
-def candidate_finder(name):
-    system = platform.system()
+def keep_directories(lines):
+    paths = []
 
+    for line in lines:
+        path = Path(line)
+
+        if path.is_dir():
+            paths.append(path)
+
+        if len(paths) >= MAX_RESULTS:
+            break
+
+    return paths
+
+def spotlight_search(name):
     home = str(Path.home())
-
     folder_command = ["mdfind", "-onlyin", home, "-name", name]
-    
-    if system == "Darwin":
-        try:
-            result = subprocess.run(folder_command,capture_output=True,text=True,timeout = 5).stdout.splitlines()
-        except subprocess.TimeoutExpired:
-            result = []
-            print("timeout expired")
 
-        paths = []
+    try:
+        result = subprocess.run(folder_command,capture_output=True,text=True,timeout = 5).stdout.splitlines()
+    except subprocess.TimeoutExpired:
+        return []
 
-        for line in result:
-            path = Path(line)
+    return keep_directories(result)
 
-            if path.is_dir():
-                paths.append(path)
+def walk_search(name):
+    home = Path.home()
+    name = name.lower()
+    paths = []
 
-            if len(paths) >= 30:
-                break
+    for root, dirs, _ in os.walk(home):
+        depth = len(Path(root).relative_to(home).parts)
 
-        return paths
+        # dirs[:] = ... prunes in place, which is what makes os.walk skip them
+        if depth >= MAX_DEPTH:
+            dirs[:] = []
+            continue
 
-    return []
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+
+        for d in dirs:
+            if name in d.lower():
+                paths.append(Path(root) / d)
+
+                if len(paths) >= MAX_RESULTS:
+                    return paths
+
+    return paths
+
+def candidate_finder(name):
+    if platform.system() == "Darwin":
+        paths = spotlight_search(name)
+
+        if paths:
+            return paths
+
+    return walk_search(name)
 
 def candidate_ranker(name,paths):
     name = name.lower()
