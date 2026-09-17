@@ -8,23 +8,25 @@ Not a chatbot that only answers. Not training an LLM from scratch. The engine is
 
 v1 core is working:
 
-- Tools: `save_note`, `set_reminder`, `open_path`, `deep_research`
+- Tools: `save_note`, `set_reminder`, `open_file`, `deep_research`
 - Agent loop: LLM plans JSON → registry runs tools → repeats until `done` (research returns after one call)
 - Brain: **Groq first** → **Ollama** (`qwen2.5:14b`) if Groq fails; Gemini helpers remain in code but are not in the default `ask()` chain
 - CLI: `python main.py` — type a request, or `exit` to quit
 - Chat: if no tool is needed, router returns `done` with a normal helpful answer (not tools-only)
-- Voice: type `listen` for mic mode (Groq Whisper → same `run` loop); say `text` to return to keyboard; Piper TTS speaks every agent reply
+- Voice: type `listen` for mic mode (Groq Whisper, English-locked → same `run` loop); say `text` to return to keyboard; Piper TTS (loaded once) speaks every reply and Enter skips it mid-sentence; silence times out instead of crashing
 - Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
 - Reminders: save to disk + schedule a **detached OS process** that notifies later (macOS `osascript` delay, Windows detached Python + `win11toast`, Linux `notify-send`) — survives quitting the agent
-- Open path: Windows `os.startfile` / macOS `open` (same tool, OS branch)
+- Open by name: say `open downloads` or `open desk-agent` — no paths. Resolves in layers: known places (`Downloads`, `Desktop`, …) → literal path → Spotlight search on macOS, ranked by exact name, then shallowest, then most recent. Two folders with the same name means it lists them and asks instead of guessing
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`
-- Next: optional portfolio extras; polish voice (errors, faster Piper load)
+- Next: daily use, then reboot-safe reminders or a non-CLI front door
+
+
 
 ## What it does (v1)
 
 - Save notes → `data/notes.txt`
 - Set reminders → `data/reminders.txt` + native OS notification (still fires after you quit `main.py`)
-- Open a folder or file (Finder on Mac, Explorer on Windows)
+- Open a folder by name, not by path (search is macOS-only for now; Windows/Linux handle known places and full paths)
 - Deep research a topic → `data/research/` + history under `data/history/`
 - Normal questions / chat → answered in the terminal without forcing a tool
 
@@ -66,7 +68,7 @@ desk-agent/
     registry.py    # tool menu + lookup
     notes.py
     reminder.py    # schedule detached OS notify (Mac / Windows / Linux)
-    files.py       # open_path (Mac + Windows)
+    files.py       # open_file: name → known places / path / Spotlight search
     research.py    # deep_research pipeline
     voice.py       # listen_once (Groq Whisper) + speak (Piper TTS)
   assets/
@@ -77,14 +79,20 @@ desk-agent/
     history/       # saved research answers (runtime)
 ```
 
+
+
 ## Tools (v1)
 
-| Tool | Status | What it does |
-|------|--------|--------------|
-| save note | done | append text to `data/notes.txt` |
-| reminder | done | store `when \| text`; detached OS process notifies later (survives quit) |
-| open path | done | open a folder/file (Mac Finder / Windows Explorer) |
-| deep research | done | search → fetch sites → conclusions → enough? → final answer |
+
+| Tool          | Status | What it does                                                            |
+| ------------- | ------ | ----------------------------------------------------------------------- |
+| save note     | done   | append text to `data/notes.txt`                                         |
+| reminder      | done   | store `when \| text`; detached OS process notifies later (survives quit) |
+| open file     | done   | open a folder by name; asks when the name is ambiguous (macOS search) |
+| deep research | done   | search → fetch sites → conclusions → enough? → final answer             |
+
+
+
 
 ## Stack
 
@@ -93,3 +101,4 @@ desk-agent/
 - Web search: `ddgs`
 - Tools: normal Python functions via a registry
 - OS: macOS + Windows + Linux (notify / open path branched by platform)
+

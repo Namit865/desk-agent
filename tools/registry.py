@@ -1,6 +1,6 @@
 from tools.notes import save_note
 from tools.reminder import set_reminder
-from tools.files import open_path
+from tools.files import open_file
 from tools.research import run_research
 
 tools = {
@@ -14,11 +14,16 @@ tools = {
         "parameters" : "text, when",
         "function" : set_reminder
     },
-    "open_path" : {
-        "description" : "Open a path in the file explorer",
+    "open_file" : {
+        "description" : "Open a file or folder in the dedicated file explorer",
         "parameters" : "text",
-        "function" : open_path
+        "function" : open_file
     },
+    # "open_path" : {
+    #     "description" : "Open a path in the dedicated file explorer",
+    #     "parameters" : "text",
+    #     "function" : open_path,
+    # },
     "deep_research" : {
         "description" : "Deep research on the given question",
         "parameters" : "text",
@@ -31,12 +36,3 @@ def get_tool(name):
         return tools[name]
     else:
         return None
-
-if __name__ == "__main__":
-    tool = get_tool("save_note")
-    
-    result = tool['function']("registry test note")
-    print(result)
-    
-    tool2 = get_tool("nope")
-    print(tool2)
