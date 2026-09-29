@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 
 MAX_RESULTS = 30
@@ -80,23 +81,22 @@ def keep_directories(lines):
 
     return paths
 
-def spotlight_search(name):
+def spotlight_lines(name):
     home = str(Path.home())
-    folder_command = ["mdfind", "-onlyin", home, "-name", name]
+    command = ["mdfind", "-onlyin", home, "-name", name]
 
     try:
-        result = subprocess.run(folder_command,capture_output=True,text=True,timeout = 5).stdout.splitlines()
+        return subprocess.run(command,capture_output=True,text=True,timeout = 5).stdout.splitlines()
     except subprocess.TimeoutExpired:
         return []
 
-    return keep_directories(result)
+def spotlight_search(name):
+    return keep_directories(spotlight_lines(name))
 
-def walk_search(name):
+def walk_home():
     home = Path.home()
-    name = name.lower()
-    paths = []
 
-    for root, dirs, _ in os.walk(home):
+    for root, dirs, files in os.walk(home):
         depth = len(Path(root).relative_to(home).parts)
 
         # dirs[:] = ... prunes in place, which is what makes os.walk skip them
@@ -106,6 +106,13 @@ def walk_search(name):
 
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
 
+        yield root, dirs, files
+
+def walk_search(name):
+    name = name.lower()
+    paths = []
+
+    for root, dirs, _ in walk_home():
         for d in dirs:
             if name in d.lower():
                 paths.append(Path(root) / d)
@@ -124,11 +131,13 @@ def candidate_finder(name):
 
     return walk_search(name)
 
-def candidate_ranker(name,paths):
+def candidate_ranker(name,paths,use_stem=False):
     name = name.lower()
 
     def sort_key(path):
-        exact = 0 if path.name.lower() == name else 1
+        # files compare by stem so "resume" exactly matches resume.pdf
+        label = name_key(path.stem) if use_stem else path.name.lower()
+        exact = 0 if label == name else 1
         depth = len(path.parts)
 
         try:
@@ -162,6 +171,102 @@ def ambiguous_answer(name):
         return f"Found multiple exact matches:\n" + '\n'.join(str(path) for path in exact)
     
     return f"Found no exact match, did you mean: \n" + '\n'.join(str(path) for path in ranking)
+
+def name_key(text):
+    # "long_notes", "long-notes" and "long notes" are the same name when spoken
+    return " ".join(re.split(r"[\s_\-]+", text.lower())).strip()
+
+def clean_file_name(name,extensions):
+    cleaned = name.strip().lower().strip(".,!?")
+
+    for ext in extensions:
+        if cleaned.endswith(ext):
+            cleaned = cleaned[:-len(ext)]
+            break
+
+    # "resume pdf" / "my report document" -> "resume" / "report"
+    filler = {"file","the","my","document"} | {ext.lstrip(".") for ext in extensions}
+
+    return name_key(" ".join(word for word in cleaned.split() if word not in filler))
+
+def keep_files(lines,extensions):
+    paths = []
+
+    for line in lines:
+        path = Path(line)
+
+        if path.is_file() and path.suffix.lower() in extensions:
+            paths.append(path)
+
+        if len(paths) >= MAX_RESULTS:
+            break
+
+    return paths
+
+def walk_file_search(name,extensions):
+    paths = []
+
+    for root, _, files in walk_home():
+        for f in files:
+            path = Path(root) / f
+
+            if name in name_key(path.stem) and path.suffix.lower() in extensions:
+                paths.append(path)
+
+                if len(paths) >= MAX_RESULTS:
+                    return paths
+
+    return paths
+
+def prefer_extension(paths,extensions):
+    # report.pdf next to its converted report.docx is one document: keep the extension listed first
+    best = {}
+
+    for path in paths:
+        key = path.with_suffix("")
+
+        if key not in best or extensions.index(path.suffix.lower()) < extensions.index(best[key].suffix.lower()):
+            best[key] = path
+
+    return [path for path in paths if best[path.with_suffix("")] == path]
+
+def resolve_file(name,extensions):
+    # returns (path, None) when one file is clearly meant, else (None, message for the user)
+    direct = Path(name.strip()).expanduser()
+
+    if direct.is_file() and direct.suffix.lower() in extensions:
+        return direct, None
+
+    stem = clean_file_name(name,extensions)
+
+    if not stem:
+        return None, "Tell me the file name."
+
+    paths = []
+
+    if platform.system() == "Darwin":
+        paths = keep_files(spotlight_lines(stem),extensions)
+
+    if not paths:
+        paths = walk_file_search(stem,extensions)
+
+    if not paths:
+        return None, f"no such file: {stem} ({', '.join(extensions)})"
+
+    ranking = prefer_extension(candidate_ranker(stem,paths,use_stem=True),extensions)
+
+    if len(ranking) == 1:
+        return ranking[0], None
+
+    exact = [path for path in ranking if name_key(path.stem) == stem]
+
+    if len(exact) == 1:
+        return exact[0], None
+
+    if len(exact) > 1:
+        return None, "Found multiple files with that name, which one?\n" + '\n'.join(str(path) for path in exact[:5])
+
+    return None, "Found no exact match, did you mean:\n" + '\n'.join(str(path) for path in ranking[:5])
 
 if __name__ == "__main__":
     question = "open pictures"
