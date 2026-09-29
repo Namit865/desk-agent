@@ -2,7 +2,7 @@ google-genai
 python-dotenv
 requests
 ddgs
-win11toast # only for windows users
+win11toast; sys_platform == "win32"
 groq
 SpeechRecognition
 pyaudio
@@ -11,3 +11,5 @@ pdf2docx
 pymupdf>=1.24.3
 python-docx
 ocrmypdf # only for scanned PDFs, also needs tesseract (brew install tesseract)
+pikepdf
+pywin32; sys_platform == "win32" # lets Windows use Microsoft Word for PDF to Word

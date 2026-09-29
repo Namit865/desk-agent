@@ -15,7 +15,7 @@ def decide(user_text,already):
         {"name":"set_reminder","text":"what to remind","when":"YYYY-MM-DD HH:MM:SS"}
         {"name":"list_reminders","text":""}
         {"name":"open_file","text":"folder name to open"}
-        {"name":"pdf_to_word","text":"pdf file name to convert"}
+        {"name":"pdf_to_word","text":"pdf file name to convert","layout":"auto"}
         {"name":"summarize_document","text":"file name to summarize (pdf, docx, txt, md)"}
         {"name":"deep_research","text":"research question"}
         {"name":"done","text":"short confirmation"}
@@ -34,7 +34,8 @@ def decide(user_text,already):
         10. For open_file, pdf_to_word and summarize_document, text is the plain name the user said ("downloads", "desk-agent", "resume", "report.pdf"). Never invent an absolute path.
         11. If a tool result is a failure or a question, reply done and pass that message to the user. Do not call the tool again.
         12. After read_notes or list_reminders, reply done and answer the user's question from that result (all of them, or only the ones they asked about).
-        13. After pdf_to_word, reply done with where the Word file was saved, the text match, and any note from the result.
+        13. After pdf_to_word, reply done with where the Word file was saved, the layout, the text match, and any note from the result.
+        14. For pdf_to_word, layout is "exact" when they want it to look exactly like the PDF (keep the design), "flow" when they want normal reflowing text to edit, else "auto".
 
     User asked this question:
     """ + user_text + f"\n\nCurrent local time is: {now_str}\n" + "Already used tools: " + (already if already else "none"))
@@ -72,7 +73,8 @@ def run(user_text):
                 return f"The model left out {', '.join(missing)} for {result['name']}. Please try again."
 
             try:
-                func = tool['function'](*[result[param] for param in tool['parameters']])
+                options = {param: result[param] for param in tool.get('optional', []) if result.get(param)}
+                func = tool['function'](*[result[param] for param in tool['parameters']], **options)
 
                 if tool.get('final'):
                     return func

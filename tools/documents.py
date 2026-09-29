@@ -1,6 +1,8 @@
 import importlib.util
 import logging
+import platform
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,7 +15,9 @@ from docx import Document
 from docx.oxml.ns import qn
 
 from agent.llm import ask
+from tools.exact_layout import looks_designed, plain_family, write_exact_docx
 from tools.files import resolve_file
+from tools.pdf_clean import remove_shadows
 
 OCR_LANGUAGE = "eng"   # tesseract codes, "eng+hin" reads two languages
 SCAN_MAX_WORDS = 10    # a page with fewer words than this...
@@ -149,7 +153,98 @@ def convert(pdf_path, docx_path, hidden_text):
     finally:
         converter.close()
 
-def pdf_to_word(name):
+    fix_font_names(docx_path)
+
+def fix_font_names(docx_path):
+    # pdf2docx names fonts "Charis SIL Bold"; Word only knows "Charis SIL" and swaps in another font
+    doc = Document(docx_path)
+
+    for root in (doc.element, doc.styles.element):
+        for fonts in root.iter(qn("w:rFonts")):
+            for key in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
+                if fonts.get(qn(key)):
+                    fonts.set(qn(key), plain_family(fonts.get(qn(key))))
+
+    doc.save(docx_path)
+
+def without_shadows(pdf_path, clean_path):
+    # returns (pdf to convert, shadows removed); any failure keeps the original
+    try:
+        removed = sum(remove_shadows(pdf_path, clean_path).values())
+    except Exception as e:
+        print(f"Shadow cleanup skipped: {e}")
+        return pdf_path, 0
+
+    return (clean_path if removed else pdf_path), removed
+
+def allow_silent_pdf_open():
+    # Word asks "Word will now convert your PDF..." even when hidden, which would stall the agent;
+    # this per-user value is Word's own switch for skipping that question
+    import winreg
+
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Office\16.0\Word\Options") as key:
+        winreg.SetValueEx(key, "DisableConvertPdfWarning", 0, winreg.REG_DWORD, 1)
+
+def word_convert(pdf_path, docx_path):
+    # Windows only: Word's own PDF reader. Returns None when it worked, else why it could not
+    try:
+        import pythoncom
+        import win32com.client
+    except ImportError:
+        return "pywin32 is not installed"
+
+    allow_silent_pdf_open()
+    pythoncom.CoInitialize()
+    word = None
+
+    try:
+        # a separate hidden Word, so documents the user has open are left alone
+        word = win32com.client.DispatchEx("Word.Application")
+        word.Visible = False
+        word.DisplayAlerts = 0
+        doc = word.Documents.Open(str(Path(pdf_path).resolve()), ConfirmConversions=False, ReadOnly=True, AddToRecentFiles=False, Visible=False)
+        doc.SaveAs2(str(Path(docx_path).resolve()), FileFormat=16)  # 16 = .docx
+        doc.Close(False)
+        return None
+    except Exception as e:
+        return str(e)
+    finally:
+        if word is not None:
+            word.Quit()
+
+        pythoncom.CoUninitialize()
+
+def convert_flow(source, docx_path, hidden_text, tmp, notes):
+    # returns what did the conversion: Word on Windows, pdf2docx everywhere else
+    if platform.system() == "Windows" and not hidden_text:
+        error = word_convert(source, docx_path)
+
+        if error is not None:
+            notes.append(f"Microsoft Word could not convert it ({error})")
+        else:
+            match = text_match(source, docx_path)
+
+            if match is None or match[0] >= LOW_MATCH:
+                return "Microsoft Word"
+
+            # Word lost text: keep whichever of the two kept more
+            other = Path(tmp) / "pdf2docx.docx"
+            convert(source, other, False)
+            other_match = text_match(source, other)
+
+            if other_match is None or other_match[0] <= match[0]:
+                return "Microsoft Word"
+
+            shutil.copyfile(other, docx_path)
+            notes.append(f"Word kept {match[0]:.1f}% of the text, pdf2docx kept more")
+            return "pdf2docx"
+
+    convert(source, docx_path, hidden_text)
+    return "pdf2docx"
+
+def pdf_to_word(name, layout="auto"):
+    # layout: "exact" keeps the look, "flow" gives reflowing text, "auto" decides from the page
+    layout = str(layout).strip().lower()
     pdf_path, message = resolve_file(name, [".pdf"])
 
     if pdf_path is None:
@@ -161,6 +256,7 @@ def pdf_to_word(name):
 
         page_count = doc.page_count
         scanned = [page.number + 1 for page in doc if is_scanned(page)]
+        designed = looks_designed(doc)
 
     docx_path = free_path(pdf_path.with_suffix(".docx"))
     notes = []
@@ -168,6 +264,7 @@ def pdf_to_word(name):
     with tempfile.TemporaryDirectory() as tmp:
         source = pdf_path
         hidden_text = False
+        shadows = 0
 
         # pdf2docx reads visible or invisible text, never both, so a mostly scanned
         # PDF gets OCR on every page (typed ones too) and only that layer is read
@@ -186,11 +283,39 @@ def pdf_to_word(name):
         elif scanned:
             notes.append(f"scanned {page_list(scanned)} kept as " + ("an image" if len(scanned) == 1 else "images"))
 
-        print(f"Converting {pdf_path.name} ({plural(page_count, 'page')})...")
-        convert(source, docx_path, hidden_text)
+        if not hidden_text:
+            source, shadows = without_shadows(pdf_path, Path(tmp) / "clean.pdf")
+
+        # a scan only has flowing text; otherwise do what was asked, or what the page looks like
+        exact = not hidden_text and (layout == "exact" or (layout != "flow" and designed))
+
+        if exact:
+            print(f"Converting {pdf_path.name} ({plural(page_count, 'page')}) in exact layout...")
+
+            try:
+                # the look comes from the original, so shadows stay; the text from the cleaned copy
+                write_exact_docx(pdf_path, source, docx_path)
+                notes.append("text sits in boxes over a picture of the design, ask for flowing text to reflow it")
+            except Exception as e:
+                exact = False
+                notes.append(f"exact layout failed ({e}), used flowing text")
+
+        if exact:
+            style = "exact layout"
+        else:
+            print(f"Converting {pdf_path.name} ({plural(page_count, 'page')}) as flowing text...")
+            engine = convert_flow(source, docx_path, hidden_text, tmp, notes)
+            style = "flowing text" + (" via Microsoft Word" if engine == "Microsoft Word" else "")
+
+            if shadows:
+                notes.append(f"removed {plural(shadows, 'shadow')} Word cannot draw")
+
+            if hidden_text and layout == "exact":
+                notes.append("scanned PDFs only convert as flowing text")
+
         match = text_match(source, docx_path)
 
-    result = f"Converted {pdf_path.name} to {docx_path} ({plural(page_count, 'page')}"
+    result = f"Converted {pdf_path.name} to {docx_path} ({style}, {plural(page_count, 'page')}"
 
     if match is not None:
         score, changed, words = match

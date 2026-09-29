@@ -18,7 +18,9 @@ v1 core is working:
 - Reminders: save to disk + schedule a **detached OS process** that notifies later (macOS `osascript` delay, Windows detached Python + `win11toast`, Linux `notify-send`) — survives quitting the agent
 - Open by name: say `open downloads` or `open desk-agent` — no paths. Resolves in layers: known places (`Downloads`, `Desktop`, …) → literal path → search. Search uses Spotlight on macOS and a depth-capped walk of the home folder elsewhere (also the macOS fallback when Spotlight finds nothing). Results are ranked by exact name, then shallowest, then most recent; two folders with the same name means it lists them and asks instead of guessing
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`; a tool call missing a parameter (e.g. `when`) is refused before it runs
-- PDF → Word: finds the PDF by name, converts with `pdf2docx`, OCRs scanned PDFs (`ocrmypdf` + Tesseract), then **measures** the result: words in the PDF vs words in the Word file → `99.5% text match, 4 of 555 words changed`. Never overwrites an existing `.docx`
+- PDF → Word: finds the PDF by name, OCRs scanned PDFs (`ocrmypdf` + Tesseract), then **measures** the result: words in the PDF vs words in the Word file → `99.5% text match, 4 of 555 words changed`. Never overwrites an existing `.docx`. Two layouts, picked from the page (or say which):
+  - **Flowing text** (letters, reports, papers): editable text that reflows. `pdf2docx`, or **Microsoft Word itself on Windows** when Word is installed (falls back to `pdf2docx` if Word fails or keeps less text). Shadows are removed first: Word has no soft masks, so they turned into black boxes and doubled words
+  - **Exact layout** (designed pages: resumes, flyers, text on coloured panels): a picture of the page design (shadows, photos, icons as they look) behind editable text boxes placed where each line was, so nothing drifts away from its text
 - Summaries: PDF / Word / text files; long files are split into parts, each part summarized, then one summary from the parts (map → reduce)
 - Recall: ask "what are my notes?" or "any reminders today?" and the router answers from the saved files
 - Next: daily use, then reboot-safe reminders or a non-CLI front door
@@ -40,7 +42,9 @@ Example: *"save a note that I need to call mom and remind me at 6pm"* → note t
 
 Example: *"research a PyTorch learning roadmap from math basics"* → `deep_research` → final answer in the terminal / `final_research.txt`.
 
-Example: *"convert my resume pdf to word"* → `pdf_to_word` → `Converted resume.pdf to ~/Downloads/resume.docx (2 pages, 100.0% text match, 0 of 612 words changed)`.
+Example: *"convert my resume pdf to word"* → `pdf_to_word` → `Converted resume.pdf to ~/Downloads/resume.docx (exact layout, 2 pages, 100.0% text match, 0 of 612 words changed)`.
+
+Example: *"convert report.pdf to word, I want to edit it"* → `pdf_to_word` with `layout: flow` → reflowing text.
 
 Example: *"summarize the quarterly report"* → `summarize_document` → summary in the terminal.
 
@@ -52,7 +56,9 @@ Example: *"what is quantization?"* → chat-style `done` answer (no tool).
 pip install -r requirements.txt
 ```
 
-On **macOS**, `win11toast` is Windows-only — if install fails, skip it or install the other packages individually. Reminder notifications on Mac use built-in `osascript` (no extra package).
+Windows-only packages (`win11toast`, `pywin32`) are marked in `requirements.txt`, so pip skips them on macOS and Linux. Reminder notifications on Mac use built-in `osascript` (no extra package).
+
+**Microsoft Word on Windows:** flowing PDF → Word conversions use Word's own PDF reader when Word 2016 or newer is installed. The agent opens a separate hidden Word, and sets Word's per-user `DisableConvertPdfWarning` option so Word's "Word will now convert your PDF" question cannot stall it. Word for Mac has no PDF converter and Pages cannot open PDFs, so macOS uses `pdf2docx` / exact layout; the `.docx` opens in Word or Pages.
 
 **Scanned PDFs (OCR)** need the Tesseract program as well as the `ocrmypdf` package: `brew install tesseract` on macOS, the [UB Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki) on Windows, `apt install tesseract-ocr` on Linux. Without it, typed PDFs still convert; scanned pages stay as images and the reply says why. For other languages install their Tesseract data and change `OCR_LANGUAGE` in `tools/documents.py` (e.g. `"eng+hin"`).
 
@@ -81,7 +87,9 @@ desk-agent/
     notes.py
     reminder.py    # schedule detached OS notify (Mac / Windows / Linux)
     files.py       # open_file + resolve_file: name → known places / path / Spotlight search
-    documents.py   # pdf_to_word (OCR + text match) and summarize_document
+    documents.py   # pdf_to_word (OCR, layout choice, Word on Windows, text match) and summarize_document
+    pdf_clean.py   # copy of a PDF without shadows, glows and see-through duplicate text
+    exact_layout.py # exact layout .docx: page design picture + positioned text boxes
     research.py    # deep_research pipeline
     voice.py       # listen_once (Groq Whisper) + speak (Piper TTS)
   assets/
@@ -106,7 +114,7 @@ desk-agent/
 | deep research | done   | search → fetch sites → conclusions → enough? → final answer             |
 | read notes    | done   | read back `data/notes.txt`, router answers from it                      |
 | list reminders| done   | upcoming reminders from `data/reminders.txt`, sorted, duplicates dropped |
-| pdf to word   | done   | find PDF → OCR if scanned → `pdf2docx` → text match score               |
+| pdf to word   | done   | find PDF → OCR if scanned → remove shadows → flowing or exact layout → text match |
 | summarize     | done   | find file → split into parts → notes per part → one summary             |
 
 
@@ -117,7 +125,7 @@ desk-agent/
 - Python
 - LLM: Groq (primary) + Ollama local fallback (`qwen2.5:14b`)
 - Web search: `ddgs`
-- Documents: `pdf2docx` + PyMuPDF (PDF → Word), `ocrmypdf` + Tesseract (OCR), `python-docx` (read Word)
+- Documents: `pdf2docx` + PyMuPDF (PDF → Word), `pikepdf` (shadow cleanup), `ocrmypdf` + Tesseract (OCR), `python-docx` (Word files), Microsoft Word via `pywin32` on Windows
 - Tools: normal Python functions via a registry
 - OS: macOS + Windows + Linux (notify / open path branched by platform)
 

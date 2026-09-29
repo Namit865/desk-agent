@@ -5,6 +5,7 @@ from tools.research import run_research
 from tools.documents import pdf_to_word, summarize_document
 
 # parameters: keys the loop reads from the model's JSON, passed in this order
+# optional: keys passed by name only when the model sent them
 # final: the tool's result is the answer, returned to the user without another router pass
 tools = {
     "save_note" : {
@@ -46,6 +47,7 @@ tools = {
     "pdf_to_word" : {
         "description" : "Convert a PDF to an editable Word file next to it, with OCR for scans",
         "parameters" : ["text"],
+        "optional" : ["layout"],
         "function" : pdf_to_word
     },
     "summarize_document" : {
