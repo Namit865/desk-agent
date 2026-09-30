@@ -1,6 +1,11 @@
+import os
+
 MAX_NOTES = 30
 
 def save_note(text):
+    # data/ is kept out of git, so a fresh copy of the project does not have it yet
+    os.makedirs("data", exist_ok=True)
+
     with open("data/notes.txt","a") as file:
         file.write(text + "\n")
         return "Note saved successfully"

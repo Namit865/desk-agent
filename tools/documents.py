@@ -239,23 +239,37 @@ def convert_flow(source, docx_path, hidden_text, tmp, notes):
     convert(source, docx_path, hidden_text)
     return "pdf2docx"
 
+class LockedPdf(Exception):
+    pass
+
 def pdf_to_word(name, layout="auto"):
     # layout: "exact" keeps the look, "flow" gives reflowing text, "auto" decides from the page
-    layout = str(layout).strip().lower()
     pdf_path, message = resolve_file(name, [".pdf"])
 
     if pdf_path is None:
         return message
 
+    docx_path = free_path(pdf_path.with_suffix(".docx"))
+
+    try:
+        details, notes = write_word(pdf_path, docx_path, layout)
+    except LockedPdf as e:
+        return str(e)
+
+    return f"Converted {pdf_path.name} to {docx_path} ({details})" + (". Note: " + "; ".join(notes) if notes else "")
+
+def write_word(pdf_path, docx_path, layout="auto"):
+    # returns (details, notes) for the reply; the file converter reuses this for pdf -> docx
+    layout = str(layout).strip().lower()
+
     with pymupdf.open(pdf_path) as doc:
         if doc.needs_pass:
-            return f"{pdf_path.name} is password protected, unlock it first."
+            raise LockedPdf(f"{pdf_path.name} is password protected, unlock it first.")
 
         page_count = doc.page_count
         scanned = [page.number + 1 for page in doc if is_scanned(page)]
         designed = looks_designed(doc)
 
-    docx_path = free_path(pdf_path.with_suffix(".docx"))
     notes = []
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -321,21 +335,16 @@ def pdf_to_word(name, layout="auto"):
         fit_fonts(docx_path, pdf_font_kinds(source))
         match = text_match(source, docx_path)
 
-    result = f"Converted {pdf_path.name} to {docx_path} ({style}, {plural(page_count, 'page')}"
+    details = f"{style}, {plural(page_count, 'page')}"
 
     if match is not None:
         score, changed, words = match
-        result += f", {score:.1f}% text match, {changed} of {plural(words, 'word')} changed"
+        details += f", {score:.1f}% text match, {changed} of {plural(words, 'word')} changed"
 
         if score < LOW_MATCH:
             notes.append("some text changed, check tables and columns against the PDF")
 
-    result += ")"
-
-    if notes:
-        result += ". Note: " + "; ".join(notes)
-
-    return result
+    return details, notes
 
 def split_text(text, size):
     parts = []

@@ -97,6 +97,9 @@ def final_research(question):
     return response
 
 def clear_research_files():
+    # runs first in every research; data/research is kept out of git, so make it here
+    Path("data/research").mkdir(parents=True, exist_ok=True)
+
     with open("data/research/conclusion.txt",encoding="utf-8",mode="w") as f:
         f.write("")
     

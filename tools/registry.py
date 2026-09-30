@@ -3,6 +3,7 @@ from tools.reminder import set_reminder, list_reminders
 from tools.files import open_file
 from tools.research import run_research
 from tools.documents import pdf_to_word, summarize_document
+from tools.convert import convert_file
 
 # parameters: keys the loop reads from the model's JSON, passed in this order
 # optional: keys passed by name only when the model sent them
@@ -55,6 +56,11 @@ tools = {
         "parameters" : ["text"],
         "function" : summarize_document,
         "final" : True
+    },
+    "convert_file" : {
+        "description" : "Convert a file to another format (images, pdf, office, text, data, audio, video)",
+        "parameters" : ["text", "to"],
+        "function" : convert_file
     }
 }
 

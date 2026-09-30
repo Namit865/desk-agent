@@ -1,8 +1,25 @@
+# secrets
 .env
+
+# Python and virtual environments
 __pycache__/
+*.pyc
+.venv*/
+venv/
+env/
+
+# editors and macOS Finder
+.DS_Store
 .cursor/rules
-.env
+.vscode/
+.idea/
+
+# personal data the agent writes while it runs: stays on this computer
+data/notes.txt
+data/reminders.txt
 data/history
 data/research
-assets/
 data/summaries
+
+# large local files (Piper voices)
+assets/

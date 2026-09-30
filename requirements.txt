@@ -13,3 +13,7 @@ python-docx
 ocrmypdf # only for scanned PDFs, also needs tesseract (brew install tesseract)
 pikepdf
 pywin32; sys_platform == "win32" # lets Windows use Microsoft Word for PDF to Word
+Pillow
+pillow-heif # iPhone HEIC photos
+openpyxl
+markdown
