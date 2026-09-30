@@ -17,6 +17,7 @@ def decide(user_text,already):
         {"name":"open_file","text":"folder name to open"}
         {"name":"pdf_to_word","text":"pdf file name to convert","layout":"auto"}
         {"name":"summarize_document","text":"file name to summarize (pdf, docx, txt, md)"}
+        {"name":"convert_file","text":"file name to convert","to":"format to make, like jpg, png, pdf, docx, txt, xlsx, mp3"}
         {"name":"deep_research","text":"research question"}
         {"name":"done","text":"short confirmation"}
         {"name":"unknown","text":"why you cannot help"}
@@ -31,11 +32,13 @@ def decide(user_text,already):
         7. use tools only when the user wants a side effect (save, remind, open, research, convert, summarize) or asks about their saved notes or reminders
         8. If they are chatting or asking for an explaination, use done and write a clear helpful answer in text.
         9. Stay short unless they ask for details.
-        10. For open_file, pdf_to_word and summarize_document, text is the plain name the user said ("downloads", "desk-agent", "resume", "report.pdf"). Never invent an absolute path.
+        10. For open_file, pdf_to_word, summarize_document and convert_file, text is the plain name the user said ("downloads", "desk-agent", "resume", "report.pdf"). Never invent an absolute path.
         11. If a tool result is a failure or a question, reply done and pass that message to the user. Do not call the tool again.
         12. After read_notes or list_reminders, reply done and answer the user's question from that result (all of them, or only the ones they asked about).
         13. After pdf_to_word, reply done with where the Word file was saved, the layout, the text match, and any note from the result.
         14. For pdf_to_word, layout is "exact" when they want it to look exactly like the PDF (keep the design), "flow" when they want normal reflowing text to edit, else "auto".
+        15. To turn any other file into another format use convert_file (png to jpg, jpg to pdf, docx to pdf, heic to jpg, xlsx to csv, mp4 to mp3). A PDF to Word goes to pdf_to_word.
+        16. After convert_file, reply done with where the new file was saved and any note from the result.
 
     User asked this question:
     """ + user_text + f"\n\nCurrent local time is: {now_str}\n" + "Already used tools: " + (already if already else "none"))

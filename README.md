@@ -25,6 +25,7 @@ v1 core is working:
   - **Fonts**: fonts not installed on this computer (including Office's Calibri / Cambria from the Word template) are swapped for an installed font of the same kind, so Pages stops reporting missing fonts
 - Summaries: PDF / Word / text files; long files are split into parts, each part summarized, then one summary from the parts (map → reduce)
 - Recall: ask "what are my notes?" or "any reminders today?" and the router answers from the saved files
+- File conversion, any format to any other it can reach: each converter is one step (png → jpg, jpg → pdf, pdf → docx, mp4 → mp3 …) and a breadth-first search chains steps, so `heic → docx` runs `heic → pdf → docx` with OCR. A failing converter is set aside and the next shortest chain is tried. Missing programs are named (`needs ffmpeg (brew install ffmpeg)`)
 - Next: daily use, then reboot-safe reminders or a non-CLI front door
 
 
@@ -38,6 +39,7 @@ v1 core is working:
 - Convert a PDF to an editable Word file next to it (`report.pdf` → `report.docx`)
 - Summarize a PDF, Word, text or markdown file → answer in the terminal + `data/summaries/`
 - Read back notes and upcoming reminders
+- Convert files between 40 formats: pictures (png, jpg, webp, heic, gif, bmp, tiff, ico), pdf, documents (docx, doc, odt, rtf, md, txt, html, pages, epub), data (csv, xlsx, json, xls, ods, numbers), slides (pptx, ppt, odp, key), audio (mp3, wav, m4a, aac, flac, ogg, opus) and video (mp4, mov, mkv, webm, avi)
 - Normal questions / chat → answered in the terminal without forcing a tool
 
 Example: *"save a note that I need to call mom and remind me at 6pm"* → note tool + reminder tool → short confirmation.
@@ -50,6 +52,10 @@ Example: *"convert report.pdf to word, I want to edit it"* → `pdf_to_word` wit
 
 Example: *"summarize the quarterly report"* → `summarize_document` → summary in the terminal.
 
+Example: *"convert logo to jpg"* → `convert_file` → `Converted logo.png to ~/Pictures/logo.jpg (png -> jpg). Note: transparent parts filled with white, JPG has no transparency`.
+
+Example: *"turn IMG_0042 into a word file"* → `convert_file` → `heic -> pdf -> docx`, the text in the photo read with OCR.
+
 Example: *"what is quantization?"* → chat-style `done` answer (no tool).
 
 ## How to run
@@ -59,6 +65,8 @@ pip install -r requirements.txt
 ```
 
 Windows-only packages (`win11toast`, `pywin32`) are marked in `requirements.txt`, so pip skips them on macOS and Linux. Reminder notifications on Mac use built-in `osascript` (no extra package).
+
+**File conversion extras (optional):** audio and video need ffmpeg (`brew install ffmpeg` / `winget install ffmpeg`); `.pages`, `.numbers` and `.key` files, and Office files to PDF on a Mac, use Pages / Numbers / Keynote (macOS asks once whether the terminal may control them); LibreOffice (libreoffice.org) adds doc, odt, rtf, xls, ods, ppt, odp on any system; Microsoft Word is used on Windows. Without them the rest still works, and docx → pdf falls back to docx → md → html → pdf (text, headings, lists and tables; no pictures).
 
 **Microsoft Word on Windows:** flowing PDF → Word conversions use Word's own PDF reader when Word 2016 or newer is installed. The agent opens a separate hidden Word, and sets Word's per-user `DisableConvertPdfWarning` option so Word's "Word will now convert your PDF" question cannot stall it. Word for Mac has no PDF converter and Pages cannot open PDFs, so macOS uses `pdf2docx` / exact layout; the `.docx` opens in Word or Pages.
 
@@ -92,6 +100,8 @@ desk-agent/
     documents.py   # pdf_to_word (OCR, layout choice, Word on Windows, text match) and summarize_document
     pdf_clean.py   # PDF copy without shadows / see-through duplicate text, unnamed glyphs named via OCR
     fonts.py       # font names, installed-font lookup and swaps, width measuring
+    convert.py     # convert_file: finds the file, searches the shortest converter chain, runs it
+    converters.py  # every direct conversion (Pillow, PyMuPDF, python-docx, openpyxl, ffmpeg, office apps)
     exact_layout.py # exact layout .docx: page design picture + positioned text boxes
     research.py    # deep_research pipeline
     voice.py       # listen_once (Groq Whisper) + speak (Piper TTS)
@@ -119,6 +129,7 @@ desk-agent/
 | list reminders| done   | upcoming reminders from `data/reminders.txt`, sorted, duplicates dropped |
 | pdf to word   | done   | find PDF → OCR if scanned → remove shadows → flowing or exact layout → text match |
 | summarize     | done   | find file → split into parts → notes per part → one summary             |
+| convert file  | done   | find file → shortest converter chain (breadth-first search) → run it    |
 
 
 
@@ -128,6 +139,7 @@ desk-agent/
 - Python
 - LLM: Groq (primary) + Ollama local fallback (`qwen2.5:14b`)
 - Web search: `ddgs`
+- Conversion: Pillow + `pillow-heif` (pictures), `openpyxl` (Excel), `markdown`, ffmpeg (audio / video), office apps when present
 - Documents: `pdf2docx` + PyMuPDF (PDF → Word), `pikepdf` (shadow cleanup), `ocrmypdf` + Tesseract (OCR), `python-docx` (Word files), Microsoft Word via `pywin32` on Windows
 - Tools: normal Python functions via a registry
 - OS: macOS + Windows + Linux (notify / open path branched by platform)
