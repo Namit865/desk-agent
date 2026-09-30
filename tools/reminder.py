@@ -9,6 +9,9 @@ base_dir = Path(__file__).parent.parent
 image_path = str(base_dir / "assets" / "message_logo.jpeg")
 
 def set_reminder(text,when):
+    # data/ is kept out of git, so a fresh copy of the project does not have it yet
+    Path("data").mkdir(exist_ok=True)
+
     with open("data/reminders.txt", "a") as f:
         f.write(f"{when} | {text}\n")
 
