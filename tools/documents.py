@@ -15,9 +15,10 @@ from docx import Document
 from docx.oxml.ns import qn
 
 from agent.llm import ask
-from tools.exact_layout import looks_designed, plain_family, write_exact_docx
+from tools.exact_layout import looks_designed, write_exact_docx
 from tools.files import resolve_file
-from tools.pdf_clean import remove_shadows
+from tools.fonts import fit_fonts, pdf_font_kinds
+from tools.pdf_clean import name_unknown_letters, remove_shadows
 
 OCR_LANGUAGE = "eng"   # tesseract codes, "eng+hin" reads two languages
 SCAN_MAX_WORDS = 10    # a page with fewer words than this...
@@ -153,20 +154,6 @@ def convert(pdf_path, docx_path, hidden_text):
     finally:
         converter.close()
 
-    fix_font_names(docx_path)
-
-def fix_font_names(docx_path):
-    # pdf2docx names fonts "Charis SIL Bold"; Word only knows "Charis SIL" and swaps in another font
-    doc = Document(docx_path)
-
-    for root in (doc.element, doc.styles.element):
-        for fonts in root.iter(qn("w:rFonts")):
-            for key in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
-                if fonts.get(qn(key)):
-                    fonts.set(qn(key), plain_family(fonts.get(qn(key))))
-
-    doc.save(docx_path)
-
 def without_shadows(pdf_path, clean_path):
     # returns (pdf to convert, shadows removed); any failure keeps the original
     try:
@@ -176,6 +163,16 @@ def without_shadows(pdf_path, clean_path):
         return pdf_path, 0
 
     return (clean_path if removed else pdf_path), removed
+
+def with_named_letters(pdf_path, named_path):
+    # returns (pdf to convert, letters named, letters still unnamed); any failure keeps the input
+    try:
+        named, left = name_unknown_letters(pdf_path, named_path, OCR_LANGUAGE)
+    except Exception as e:
+        print(f"Letter repair skipped: {e}")
+        return pdf_path, 0, 0
+
+    return (named_path if named else pdf_path), named, left
 
 def allow_silent_pdf_open():
     # Word asks "Word will now convert your PDF..." even when hidden, which would stall the agent;
@@ -285,6 +282,13 @@ def pdf_to_word(name, layout="auto"):
 
         if not hidden_text:
             source, shadows = without_shadows(pdf_path, Path(tmp) / "clean.pdf")
+            source, named, unnamed = with_named_letters(source, Path(tmp) / "letters.pdf")
+
+            if named:
+                notes.append(f"OCR read {plural(named, 'letter')} the PDF does not name, like a joined \"Th\"")
+
+            if unnamed:
+                notes.append(f"{plural(unnamed, 'letter')} the PDF does not name show as ?" + ("" if shutil.which("tesseract") else ", install tesseract to read them"))
 
         # a scan only has flowing text; otherwise do what was asked, or what the page looks like
         exact = not hidden_text and (layout == "exact" or (layout != "flow" and designed))
@@ -313,6 +317,8 @@ def pdf_to_word(name, layout="auto"):
             if hidden_text and layout == "exact":
                 notes.append("scanned PDFs only convert as flowing text")
 
+        # fonts this computer lacks become installed ones of the same kind, or Pages reports them missing
+        fit_fonts(docx_path, pdf_font_kinds(source))
         match = text_match(source, docx_path)
 
     result = f"Converted {pdf_path.name} to {docx_path} ({style}, {plural(page_count, 'page')}"

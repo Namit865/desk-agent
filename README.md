@@ -20,7 +20,9 @@ v1 core is working:
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`; a tool call missing a parameter (e.g. `when`) is refused before it runs
 - PDF → Word: finds the PDF by name, OCRs scanned PDFs (`ocrmypdf` + Tesseract), then **measures** the result: words in the PDF vs words in the Word file → `99.5% text match, 4 of 555 words changed`. Never overwrites an existing `.docx`. Two layouts, picked from the page (or say which):
   - **Flowing text** (letters, reports, papers): editable text that reflows. `pdf2docx`, or **Microsoft Word itself on Windows** when Word is installed (falls back to `pdf2docx` if Word fails or keeps less text). Shadows are removed first: Word has no soft masks, so they turned into black boxes and doubled words
-  - **Exact layout** (designed pages: resumes, flyers, text on coloured panels): a picture of the page design (shadows, photos, icons as they look) behind editable text boxes placed where each line was, so nothing drifts away from its text
+  - **Exact layout** (designed pages: resumes, flyers, letterheads, text on coloured panels): a picture of the page design (shadows, photos, icons as they look) behind editable text boxes placed where each line was, so nothing drifts away from its text. Letter spacing keeps every line exactly as wide as in the PDF even when a stand-in font is used, so centred lines and their shadows still line up
+  - **Letters the PDF does not name**: some PDFs draw "Th" or "fi" as one joined glyph without saying which letters it stands for, so Pages showed `?e Deputy Engineer`. OCR (Tesseract) reads the whole word, the known letters give away the missing ones, and the PDF copy being converted gets the missing entry
+  - **Fonts**: fonts not installed on this computer (including Office's Calibri / Cambria from the Word template) are swapped for an installed font of the same kind, so Pages stops reporting missing fonts
 - Summaries: PDF / Word / text files; long files are split into parts, each part summarized, then one summary from the parts (map → reduce)
 - Recall: ask "what are my notes?" or "any reminders today?" and the router answers from the saved files
 - Next: daily use, then reboot-safe reminders or a non-CLI front door
@@ -88,7 +90,8 @@ desk-agent/
     reminder.py    # schedule detached OS notify (Mac / Windows / Linux)
     files.py       # open_file + resolve_file: name → known places / path / Spotlight search
     documents.py   # pdf_to_word (OCR, layout choice, Word on Windows, text match) and summarize_document
-    pdf_clean.py   # copy of a PDF without shadows, glows and see-through duplicate text
+    pdf_clean.py   # PDF copy without shadows / see-through duplicate text, unnamed glyphs named via OCR
+    fonts.py       # font names, installed-font lookup and swaps, width measuring
     exact_layout.py # exact layout .docx: page design picture + positioned text boxes
     research.py    # deep_research pipeline
     voice.py       # listen_once (Groq Whisper) + speak (Piper TTS)

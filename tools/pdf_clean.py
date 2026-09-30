@@ -1,4 +1,8 @@
 import math
+import re
+import shutil
+import subprocess
+from collections import Counter, defaultdict
 
 import numpy as np
 import pikepdf
@@ -250,3 +254,137 @@ def remove_shadows(src, dst):
     fitz_doc.close()
 
     return {kind: count for kind, count in cleaner.removed.items() if count}
+
+# Letters the PDF does not name: a font may draw "Th" as one joined glyph and never say
+# which letters it stands for. Readers then show the glyph's number, which Pages draws as ?.
+# OCR reads the whole word ("Thanking"), the known letters ("?anking") give away the rest,
+# and the font's ToUnicode map gets the missing entry so every converter reads it right.
+
+UNKNOWN = "\ufffd"
+PLAIN = pymupdf.TEXTFLAGS_RAWDICT & ~pymupdf.TEXT_CID_FOR_UNKNOWN_UNICODE  # unknown -> U+FFFD
+CODED = pymupdf.TEXTFLAGS_RAWDICT | pymupdf.TEXT_CID_FOR_UNKNOWN_UNICODE   # unknown -> its code
+OCR_DPI = 400
+VOTES_NEEDED = 3
+
+def unnamed_words(page):
+    # (font, [(char, code of an unnamed glyph or None)], bbox) for words holding unnamed glyphs
+    plain = page.get_text("rawdict", flags=PLAIN)["blocks"]
+    coded = page.get_text("rawdict", flags=CODED)["blocks"]
+
+    for plain_block, coded_block in zip(plain, coded):
+        for plain_line, coded_line in zip(plain_block.get("lines", []), coded_block.get("lines", [])):
+            for plain_span, coded_span in zip(plain_line["spans"], coded_line["spans"]):
+                if len(plain_span["chars"]) != len(coded_span["chars"]):
+                    continue
+
+                word = []
+
+                for char, coded_char in list(zip(plain_span["chars"], coded_span["chars"])) + [(None, None)]:
+                    if char is not None and not char["c"].isspace():
+                        word.append((char, coded_char))
+                        continue
+
+                    if any(c["c"] == UNKNOWN for c, _ in word):
+                        bbox = pymupdf.Rect()
+
+                        for c, _ in word:
+                            bbox |= c["bbox"]
+
+                        yield plain_span["font"], [(c["c"], ord(cc["c"]) if c["c"] == UNKNOWN else None) for c, cc in word], bbox
+
+                    word = []
+
+def ocr_word(page, bbox, language):
+    pix = page.get_pixmap(dpi=OCR_DPI, clip=bbox, colorspace=pymupdf.csGRAY)
+
+    # white margin instead of a wider clip, which would catch bits of the next word
+    pad = max(8, pix.height // 2)
+    canvas = pymupdf.Pixmap(pymupdf.csGRAY, pymupdf.IRect(0, 0, pix.width + 2 * pad, pix.height + 2 * pad), False)
+    canvas.clear_with(255)
+    pix.set_origin(pad, pad)
+    canvas.copy(pix, pix.irect)
+
+    # psm 7: the picture is one line of text
+    result = subprocess.run(["tesseract", "stdin", "stdout", "--psm", "7", "-l", language], input=canvas.tobytes("png"), capture_output=True, timeout=60)
+
+    return result.stdout.decode("utf-8", "ignore").strip()
+
+def recover(word, text):
+    # "?anking" read as "Thanking" -> ("Th",)
+    pattern = "".join("(.{1,4}?)" if code is not None else re.escape(char) for char, code in word)
+    match = re.fullmatch(pattern, re.sub(r"\s+", "", text))
+
+    if match is None or not all(group.isprintable() for group in match.groups()):
+        return None
+
+    return match.groups()
+
+def cmap_codes(cmap):
+    # the codes a ToUnicode map already names
+    codes = set()
+
+    for block in re.findall(r"beginbfchar(.*?)endbfchar", cmap, re.S):
+        codes.update(int(src, 16) for src in re.findall(r"<([0-9A-Fa-f]+)>\s*<[0-9A-Fa-f]*>", block))
+
+    for block in re.findall(r"beginbfrange(.*?)endbfrange", cmap, re.S):
+        for low, high in re.findall(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*(?:<[0-9A-Fa-f]*>|\[[^\]]*\])", block):
+            codes.update(range(int(low, 16), int(high, 16) + 1))
+
+    return codes
+
+def count_unknown(path):
+    with pymupdf.open(path) as doc:
+        return sum(page.get_text("text", flags=PLAIN).count(UNKNOWN) for page in doc)
+
+def name_unknown_letters(src, dst, language="eng"):
+    # writes dst with the unnamed glyphs named when OCR could read them; returns (letters named, letters left)
+    before = count_unknown(src)
+
+    if before == 0 or shutil.which("tesseract") is None:
+        return 0, before
+
+    votes = defaultdict(Counter)
+
+    with pymupdf.open(src) as doc:
+        for page in doc:
+            for font, word, bbox in unnamed_words(page):
+                codes = [code for _, code in word if code is not None]
+
+                # three matching reads settle a glyph, no need to OCR every "The"
+                if all(votes[(font, code)] and votes[(font, code)].most_common(1)[0][1] >= VOTES_NEEDED for code in codes):
+                    continue
+
+                groups = recover(word, ocr_word(page, bbox, language))
+
+                for code, text in zip(codes, groups or []):
+                    votes[(font, code)][text] += 1
+
+    names = {key: counter.most_common(1)[0][0] for key, counter in votes.items() if counter}
+
+    if not names:
+        return 0, before
+
+    with pikepdf.open(src) as pdf:
+        for obj in pdf.objects:
+            if not isinstance(obj, pikepdf.Dictionary) or obj.get("/Type") != pikepdf.Name.Font or "/ToUnicode" not in obj:
+                continue
+
+            font = str(obj.get("/BaseFont", "")).lstrip("/").split("+")[-1]
+            cmap = obj.ToUnicode.read_bytes().decode("latin-1")
+            named = cmap_codes(cmap)
+            width = 4 if obj.get("/Subtype") == pikepdf.Name.Type0 else 2
+            # only codes this font leaves unnamed: another subset of the same font may use the code for a real letter
+            entries = [f"<{code:0{width}X}> <{text.encode('utf-16-be').hex().upper()}>" for (name, code), text in names.items() if name == font and code not in named]
+
+            if not entries:
+                continue
+
+            # at most 100 entries per block, and a later entry wins over an earlier one
+            blocks = "".join(f"{len(chunk)} beginbfchar\n" + "\n".join(chunk) + "\nendbfchar\n" for chunk in (entries[i:i + 100] for i in range(0, len(entries), 100)))
+            obj.ToUnicode.write(cmap.replace("endcmap", blocks + "endcmap", 1).encode("latin-1"))
+
+        pdf.save(dst)
+
+    after = count_unknown(dst)
+
+    return before - after, after

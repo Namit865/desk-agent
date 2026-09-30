@@ -9,30 +9,16 @@ from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from docx.shared import Pt
 
+from tools.fonts import font_family, installed_font, kind, spacing_to_fit
+
 # Exact layout: every page becomes a picture of its design (text removed) behind
 # editable text boxes placed where each line was. Nothing reflows, so nothing drifts.
 
 BACKGROUND_DPI = 150
 EMU = 12700                 # EMUs per point
 DESIGNED_SHARE = 0.15       # share of text lines on coloured panels that marks a designed page
+BOX_HEIGHT = 1.6            # room below each line, in case an app does not grow boxes to their text
 WPS = 'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"'
-COMMON_FAMILIES = {"TimesNewRoman": "Times New Roman", "Times": "Times New Roman", "CourierNew": "Courier New", "Courier": "Courier New", "Arial": "Arial", "Helvetica": "Helvetica"}
-
-def font_family(fonts, name):
-    # pdf2docx reads the family from the embedded font file; fonts that are not embedded fall back to their name
-    found = fonts.get(name)
-
-    if found is not None:
-        family = found.name
-    else:
-        base = re.sub(r"(PSMT|MT|PS)$", "", re.split(r"[-,]", name.split("+")[-1])[0])
-        family = COMMON_FAMILIES.get(base, base)
-
-    return plain_family(family)
-
-def plain_family(family):
-    # bold and italic are switched on in the run, "Charis SIL Bold" is no family Word knows
-    return re.sub(r"(\s+(Regular|Bold|Italic|Oblique))+$", "", family, flags=re.I) or family
 
 def colored(fill):
     return fill is not None and min(fill) < 0.94
@@ -73,16 +59,24 @@ def clean_text(text):
     return escape(re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text))
 
 def run_xml(span, fonts):
-    family = escape(font_family(fonts, span["font"]), {'"': "&quot;"})
-    bold = span["flags"] & 16 or "bold" in span["font"].lower()
-    italic = span["flags"] & 2 or re.search(r"italic|oblique", span["font"], re.I)
+    bold = bool(span["flags"] & 16 or "bold" in span["font"].lower())
+    italic = bool(span["flags"] & 2 or re.search(r"italic|oblique", span["font"], re.I))
+    family = font_family(fonts, span["font"])
+    family = installed_font(family, kind(family, span["flags"]))
     size = max(2, round(span["size"] * 2))
 
-    # element order inside w:rPr is fixed by the schema: rFonts, b, i, color, sz, szCs
+    # a stand-in font runs wider or narrower than the PDF's; spacing the letters keeps each
+    # line as wide as in the PDF, so centred lines and the shadows behind them still line up
+    width = span["bbox"][2] - span["bbox"][0]
+    twips = round(spacing_to_fit(family, bold, italic, span["text"], span["size"], width) * 20)
+    family = escape(family, {'"': "&quot;"})
+
+    # element order inside w:rPr is fixed by the schema: rFonts, b, i, color, spacing, sz, szCs
     return (
         f'<w:r><w:rPr><w:rFonts w:ascii="{family}" w:hAnsi="{family}" w:cs="{family}" w:eastAsia="{family}"/>'
         + ("<w:b/>" if bold else "") + ("<w:i/>" if italic else "")
-        + f'<w:color w:val="{span["color"]:06X}"/><w:sz w:val="{size}"/><w:szCs w:val="{size}"/></w:rPr>'
+        + f'<w:color w:val="{span["color"]:06X}"/>' + (f'<w:spacing w:val="{twips}"/>' if twips else "")
+        + f'<w:sz w:val="{size}"/><w:szCs w:val="{size}"/></w:rPr>'
         f'<w:t xml:space="preserve">{clean_text(span["text"])}</w:t></w:r>'
     )
 
@@ -154,6 +148,7 @@ def write_exact_docx(design_pdf, text_pdf, docx_path):
                 # text stays put because it starts at the left and the box is see-through
                 box = pymupdf.Rect(line["bbox"])
                 box.x1 = max(box.x1, page.rect.x1 - 1)
+                box.y1 = box.y0 + box.height * BOX_HEIGHT
                 shape_id += 1
                 runs = "".join(run_xml(span, fonts) for span in spans)
                 paragraph._p.append(parse_xml(anchor_xml(shape_id, box, False, textbox_graphic(box, runs, line["bbox"][3] - line["bbox"][1]))))
