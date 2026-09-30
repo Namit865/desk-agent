@@ -21,6 +21,35 @@ def set_reminder(text,when):
 
     return f"Reminder set for {when}: {text} successfully"
 
+def list_reminders():
+    try:
+        with open("data/reminders.txt") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        lines = []
+
+    now = datetime.now()
+    upcoming = set()  # a set drops lines saved twice
+
+    for line in lines:
+        when, sep, text = line.strip().partition(" | ")
+
+        if not sep:
+            continue
+
+        try:
+            when_time = datetime.strptime(when, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+
+        if when_time >= now:
+            upcoming.add((when_time, text))
+
+    if not upcoming:
+        return "No upcoming reminders"
+
+    return "Upcoming reminders:\n" + "\n".join(f"- {when_time:%Y-%m-%d %H:%M} | {text}" for when_time, text in sorted(upcoming))
+
 def show_reminder(text):
     system = platform.system()
 

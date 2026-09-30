@@ -11,8 +11,12 @@ def decide(user_text,already):
         
         Tools and exact shapes:
         {"name":"save_note","text":"note content"}
+        {"name":"read_notes","text":""}
         {"name":"set_reminder","text":"what to remind","when":"YYYY-MM-DD HH:MM:SS"}
+        {"name":"list_reminders","text":""}
         {"name":"open_file","text":"folder name to open"}
+        {"name":"pdf_to_word","text":"pdf file name to convert","layout":"auto"}
+        {"name":"summarize_document","text":"file name to summarize (pdf, docx, txt, md)"}
         {"name":"deep_research","text":"research question"}
         {"name":"done","text":"short confirmation"}
         {"name":"unknown","text":"why you cannot help"}
@@ -24,11 +28,14 @@ def decide(user_text,already):
         4. Two user asks → do the next unfinished one only.
         5. deep_research at most once. If it is already in Already used tools, reply done.
         6. If you cannot follow these shapes, reply unknown.
-        7. use tools only when the user wants a side effect (save, remind, open, research)
+        7. use tools only when the user wants a side effect (save, remind, open, research, convert, summarize) or asks about their saved notes or reminders
         8. If they are chatting or asking for an explaination, use done and write a clear helpful answer in text.
         9. Stay short unless they ask for details.
-        10. For open_file, text is the plain name the user said ("downloads", "desk-agent"). Never invent an absolute path.
+        10. For open_file, pdf_to_word and summarize_document, text is the plain name the user said ("downloads", "desk-agent", "resume", "report.pdf"). Never invent an absolute path.
         11. If a tool result is a failure or a question, reply done and pass that message to the user. Do not call the tool again.
+        12. After read_notes or list_reminders, reply done and answer the user's question from that result (all of them, or only the ones they asked about).
+        13. After pdf_to_word, reply done with where the Word file was saved, the layout, the text match, and any note from the result.
+        14. For pdf_to_word, layout is "exact" when they want it to look exactly like the PDF (keep the design), "flow" when they want normal reflowing text to edit, else "auto".
 
     User asked this question:
     """ + user_text + f"\n\nCurrent local time is: {now_str}\n" + "Already used tools: " + (already if already else "none"))
@@ -60,16 +67,16 @@ def run(user_text):
         if tool is None or result['name'] == "unknown":
             return result.get('text')
         else:
-            try:
-                if result.get('when') is not None:
-                    if result['name'] == "set_reminder":
-                        func = tool['function'](result['text'],result.get('when'))
-                    else:
-                        func = tool['function'](result['text'])
-                else:
-                    func = tool['function'](result['text'])
+            missing = [param for param in tool['parameters'] if result.get(param) is None]
 
-                if result['name'] == "deep_research":
+            if missing:
+                return f"The model left out {', '.join(missing)} for {result['name']}. Please try again."
+
+            try:
+                options = {param: result[param] for param in tool.get('optional', []) if result.get(param)}
+                func = tool['function'](*[result[param] for param in tool['parameters']], **options)
+
+                if tool.get('final'):
                     return func
             except Exception as e:
                 return f"Error calling tool: {e}"
