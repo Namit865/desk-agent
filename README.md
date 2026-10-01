@@ -15,7 +15,7 @@ v1 core is working:
 - Chat: if no tool is needed, router returns `done` with a normal helpful answer (not tools-only)
 - Voice: type `listen` for mic mode (Groq Whisper, English-locked → same `run` loop); say `text` to return to keyboard; Piper TTS (loaded once) speaks every reply and Enter skips it mid-sentence; silence times out instead of crashing
 - Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
-- Reminders: save to disk + schedule a **detached OS process** that notifies later (macOS `osascript` delay, Windows detached Python + `win11toast`, Linux `notify-send`) — survives quitting the agent
+- Reminders: saved in a small SQLite database (`data/reminders.db`); one **background service** (`tools/reminder_service.py`) checks it every 5 seconds and shows what is due. The service starts at login (macOS launchd agent, Windows Run entry, Linux autostart), so reminders **survive restarts**; one that fell due while the computer was off shows as `Missed at 18:00 on 30 Sep: …`. One copy runs at a time (OS file lock); `data/reminders.log` records what was shown. An old `data/reminders.txt` is imported once and kept as `reminders.txt.imported`
 - Open by name: say `open downloads` or `open desk-agent` — no paths. Resolves in layers: known places (`Downloads`, `Desktop`, …) → literal path → search. Search uses Spotlight on macOS and a depth-capped walk of the home folder elsewhere (also the macOS fallback when Spotlight finds nothing). Results are ranked by exact name, then shallowest, then most recent; two folders with the same name means it lists them and asks instead of guessing
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`; a tool call missing a parameter (e.g. `when`) is refused before it runs
 - PDF → Word: finds the PDF by name, OCRs scanned PDFs (`ocrmypdf` + Tesseract), then **measures** the result: words in the PDF vs words in the Word file → `99.5% text match, 4 of 555 words changed`. Never overwrites an existing `.docx`. Two layouts, picked from the page (or say which):
@@ -26,14 +26,14 @@ v1 core is working:
 - Summaries: PDF / Word / text files; long files are split into parts, each part summarized, then one summary from the parts (map → reduce)
 - Recall: ask "what are my notes?" or "any reminders today?" and the router answers from the saved files
 - File conversion, any format to any other it can reach: each converter is one step (png → jpg, jpg → pdf, pdf → docx, mp4 → mp3 …) and a breadth-first search chains steps, so `heic → docx` runs `heic → pdf → docx` with OCR. A failing converter is set aside and the next shortest chain is tried. Missing programs are named (`needs ffmpeg (brew install ffmpeg)`)
-- Next: daily use, then reboot-safe reminders or a non-CLI front door
+- Next: daily use, then a router test set, conversation memory, or a non-CLI front door
 
 
 
 ## What it does (v1)
 
 - Save notes → `data/notes.txt`
-- Set reminders → `data/reminders.txt` + native OS notification (still fires after you quit `main.py`)
+- Set reminders → `data/reminders.db` + native OS notification (fires after you quit `main.py`, and after a restart)
 - Open a folder by name, not by path (Spotlight on macOS, home-folder walk on Windows/Linux)
 - Deep research a topic → `data/research/` + history under `data/history/`
 - Convert a PDF to an editable Word file next to it (`report.pdf` → `report.docx`)
@@ -95,7 +95,8 @@ desk-agent/
   tools/
     registry.py    # tool menu + lookup
     notes.py
-    reminder.py    # schedule detached OS notify (Mac / Windows / Linux)
+    reminder.py    # reminders database, start-at-login entry (Mac / Windows / Linux)
+    reminder_service.py # background service: shows reminders when due, catches up after a restart
     files.py       # open_file + resolve_file: name → known places / path / Spotlight search
     documents.py   # pdf_to_word (OCR, layout choice, Word on Windows, text match) and summarize_document
     pdf_clean.py   # PDF copy without shadows / see-through duplicate text, unnamed glyphs named via OCR
@@ -108,7 +109,7 @@ desk-agent/
   assets/
     voices/        # Piper .onnx voice files (local; usually gitignored)
   data/
-    notes.txt, reminders.txt
+    notes.txt, reminders.db, reminders.log   # personal, kept out of git
     research/      # site_contents, conclusion, final_research (runtime)
     summaries/     # last summary per file (runtime)
     history/       # saved research answers (runtime)
@@ -122,11 +123,11 @@ desk-agent/
 | Tool          | Status | What it does                                                            |
 | ------------- | ------ | ----------------------------------------------------------------------- |
 | save note     | done   | append text to `data/notes.txt`                                         |
-| reminder      | done   | store `when \| text`; detached OS process notifies later (survives quit) |
+| reminder      | done   | saved in SQLite; background service shows it, survives restarts         |
 | open file     | done   | open a folder by name; asks when the name is ambiguous                  |
 | deep research | done   | search → fetch sites → conclusions → enough? → final answer             |
 | read notes    | done   | read back `data/notes.txt`, router answers from it                      |
-| list reminders| done   | upcoming reminders from `data/reminders.txt`, sorted, duplicates dropped |
+| list reminders| done   | reminders not yet shown, sorted; overdue ones marked                     |
 | pdf to word   | done   | find PDF → OCR if scanned → remove shadows → flowing or exact layout → text match |
 | summarize     | done   | find file → split into parts → notes per part → one summary             |
 | convert file  | done   | find file → shortest converter chain (breadth-first search) → run it    |

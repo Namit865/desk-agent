@@ -16,7 +16,8 @@ env/
 
 # personal data the agent writes while it runs: stays on this computer
 data/notes.txt
-data/reminders.txt
+data/reminders.*
+data/reminder_service.lock
 data/history
 data/research
 data/summaries
