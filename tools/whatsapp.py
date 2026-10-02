@@ -11,7 +11,8 @@ import tempfile
 import time
 import webbrowser
 
-from tools.contacts import WHATSAPP_DB, find_person, pretty
+from tools.contacts import (HONORIFICS, LEARN_AFTER, WHATSAPP_DB, covers, find_people, home_region,
+                            normalize_number, pretty, remember, usual, words)
 from tools.whatsapp_link import forget_link
 from tools.files import clean_file_name, name_key, resolve_file
 
@@ -46,6 +47,22 @@ KIND_WORDS = {
 }
 ANY_TYPE = SEND_TYPES + [".pages", ".numbers", ".key", ".md", ".html", ".json", ".xml"]
 
+# a question ("which Harsh?") keeps the request it came from this long, so a short answer finishes it
+ANSWER_WITHIN = 300     # seconds
+ORDINALS = {"1": 0, "one": 0, "first": 0, "1st": 0, "pehla": 0, "pehli": 0, "pahla": 0,
+            "2": 1, "two": 1, "second": 1, "2nd": 1, "dusra": 1, "doosra": 1, "dusri": 1,
+            "3": 2, "three": 2, "third": 2, "3rd": 2, "teesra": 2, "tisra": 2,
+            "4": 3, "four": 3, "fourth": 3, "4th": 3, "5": 4, "five": 4, "fifth": 4, "5th": 4,
+            "6": 5, "six": 5, "sixth": 5, "6th": 5}
+FILLER = {"the", "number", "no", "option", "send", "to", "it", "him", "her", "them", "please", "pls",
+          "that", "this", "is", "wala", "vala", "waala", "in", "from", "folder", "file", "one"}
+YES = {"yes", "y", "ok", "okay", "sure", "yeah", "yep", "haan", "ha", "han", "send", "send it", "go ahead", "do it"}
+CANCEL = {"cancel", "no", "nope", "stop", "dont", "don t", "do not", "leave it", "never mind", "nevermind",
+          "nahi", "na", "mat bhejo", "rehne do"}
+DELIVERED = ("Opened", "Sent ")    # every reply that reached the chat starts with one of these
+
+pending = None      # {"kind": "person" or "file", "options": [...], "request": {...}, "since": time}
+
 NOT_LINKED = ("To send directly, desk-agent must first be linked to your WhatsApp: say 'link whatsapp' and scan "
               "the code with your phone (WhatsApp → Settings → Linked devices → Link a device).")
 
@@ -76,14 +93,20 @@ function run(argv) {
 }
 '''
 
+def numbered(options):
+    lines = [f"{option.name} ({pretty(option.number)})" if hasattr(option, "number") else str(option) for option in options]
+
+    return "\n".join(f"  {n}. {line}" for n, line in enumerate(lines, 1))
+
 def find_file(name, direct):
-    # (path, None) or (None, message); direct sending accepts only a file that is clearly the one meant
+    # (path, None, []) or (None, message, files the message offers to pick from);
+    # direct sending accepts only a file that is clearly the one meant
     said = name.strip()
     typed = Path(said).suffix.lower()
 
     # a full path is the file itself; a bare name is searched for, never matched against the current folder
     if Path(said).expanduser().is_absolute() and Path(said).expanduser().is_file():
-        return Path(said).expanduser(), None
+        return Path(said).expanduser(), None, []
 
     kept = []
     extensions = []
@@ -103,19 +126,28 @@ def find_file(name, direct):
     name = " ".join(kept)
     path, message = resolve_file(name, extensions)
 
-    if path is None or not direct:
-        return path, message
+    if path is None:
+        # "Found multiple files with that name..." / "did you mean:" followed by one path per line
+        options = [Path(line) for line in (message or "").splitlines()[1:] if Path(line).is_file()]
+
+        if options:
+            return None, f"{message.splitlines()[0]}\n{numbered(options)}\nSay 1, 2... or where it is.", options
+
+        return None, message, []
+
+    if not direct:
+        return path, None, []
 
     if name_key(path.stem) != clean_file_name(name, extensions):
-        return None, f"The closest file is {path}. To send it directly, say its full name ({path.stem})."
+        return None, f"The closest file is {path}. Say yes to send it, or tell me its full name.", [path]
 
     twins = [other for other in path.parent.iterdir() if other != path and other.stem == path.stem and other.suffix.lower() in extensions]
 
     if twins:
-        options = ", ".join(other.name for other in [path] + twins)
-        return None, f"There are {options}. Which one? Say it with its type, like {path.name}."
+        options = [path] + twins
+        return None, f"There are {len(options)} files named {path.stem}:\n{numbered(options)}\nWhich one? Say 1, 2... or its type.", options
 
-    return path, None
+    return path, None, []
 
 def chat_link(number, message, web=False):
     digits = number.lstrip("+")
@@ -124,33 +156,140 @@ def chat_link(number, message, web=False):
     return f"https://web.whatsapp.com/send?phone={digits}{text}" if web else f"whatsapp://send?phone={digits}{text}"
 
 def send_whatsapp(file, to, message=None, direct=False):
+    global pending
+    pending = None      # a new request drops any question still waiting
+
     direct = direct is True or str(direct).strip().lower() in ("true", "yes", "1")
     message = str(message or "").strip() or None
     file = str(file or "").strip()
+    request = {"to": str(to), "path": None, "message": message, "direct": direct}
 
     if not file and not message:
         return "Tell me which file, or what message, to send."
 
-    path = None
-
     if file:
-        path, question = find_file(file, direct)
+        path, question, options = find_file(file, direct)
 
         if path is None:
-            return question
+            return ask("file", options, request, question) if options else question
 
-        if path.stat().st_size > MAX_SIZE:
-            return f"{path.name} is larger than 2 GB, which is the most WhatsApp takes."
+        request["path"] = path
 
-    person, question = find_person(to)
+    return to_person(request)
 
-    if person is None:
-        return question
+def to_person(request):
+    path = request["path"]
 
-    if direct:
-        return send_directly(person, path, message)
+    if path and path.stat().st_size > MAX_SIZE:
+        return f"{path.name} is larger than 2 GB, which is the most WhatsApp takes."
 
-    return open_ready_to_send(person, path, message)
+    people, problem = find_people(request["to"])
+
+    if not people:
+        return problem
+
+    return deliver(people, request)
+
+def deliver(people, request):
+    to = request["to"]
+    learned = len(people) > 1
+
+    if learned:
+        person = usual(to, people)
+
+        if person is None:
+            question = (f"More than one person fits '{to}':\n{numbered(people)}\nWhich one? Say 1, 2... or the name. "
+                        f"Pick the same person {LEARN_AFTER} times for '{to}' and I will stop asking.")
+            return ask("person", people, request, question)
+    else:
+        person = people[0]
+
+    if request["direct"]:
+        reply = send_directly(person, request["path"], request["message"])
+    else:
+        reply = open_ready_to_send(person, request["path"], request["message"])
+
+    if not reply.startswith(DELIVERED):
+        return reply
+
+    if person.source != "number":
+        remember(to, person)
+
+    if learned:
+        # picked from memory: say so, and let one short answer switch to someone else
+        ask("person", people, request, None)
+        pending["done"] = person.number
+        reply += f" I picked {person.name} because you chose them for '{to}' before. Wrong person? Say the right number:\n{numbered(people)}"
+
+    return reply
+
+def ask(kind, options, request, question):
+    # keep the request with its question, so the answer alone finishes it
+    global pending
+    pending = {"kind": kind, "options": options, "request": request, "since": time.monotonic()}
+
+    return question
+
+def chosen(text, options, kind):
+    # the option a short answer points at: "2", "the first one", "dusra", "harsh patel", "+91 98...",
+    # "the pdf", "the one in downloads", "yes" (when there is one option); None if it is not an answer
+    said = words(text)
+    ranks = [ORDINALS[word] for word in said if word in ORDINALS and word != "one"] or [ORDINALS[word] for word in said if word == "one"]
+    rest = [word for word in said if word not in ORDINALS and word not in FILLER]
+
+    if ranks and not rest and len(set(ranks)) == 1:
+        return options[ranks[0]] if ranks[0] < len(options) else "out of range"
+
+    if len(options) == 1 and " ".join(said) in YES:
+        return options[0]
+
+    if not rest:
+        return None
+
+    if kind == "person":
+        # only a reply that is just a number is read as one ("save contact harsh +91..." is a new request)
+        number = normalize_number(text, home_region()) if all(word.isdigit() for word in rest) else None
+        fits = [person for person in options if person.number == number] if number else []
+
+        for form in (rest, [word for word in rest if word not in HONORIFICS]):
+            fits = fits or ([person for person in options if covers(" ".join(form), person.name)] if form else [])
+    else:
+        kinds = [ext for word in rest for ext in KIND_WORDS.get(word, [])]
+        fits = [path for path in options if path.suffix.lower() in kinds] if kinds else [path for path in options if covers(" ".join(rest), str(path))]
+
+    return fits[0] if len(fits) == 1 else None
+
+def answer_pending(text):
+    # called before the router: a short answer to the last question finishes that request;
+    # anything else is a new request, and the question is dropped
+    global pending
+    waiting, pending = pending, None
+
+    if waiting is None or time.monotonic() - waiting["since"] > ANSWER_WITHIN:
+        return None
+
+    if " ".join(words(text)) in CANCEL:
+        return "Okay, I won't send it."
+
+    choice = chosen(text, waiting["options"], waiting["kind"])
+
+    if choice == "out of range":
+        pending = waiting
+        return f"There are only {len(waiting['options'])} choices: say a number from 1 to {len(waiting['options'])}."
+
+    if choice is None:
+        return None
+
+    request = dict(waiting["request"])
+
+    if waiting.get("done") and waiting["done"] == getattr(choice, "number", None):
+        return f"{choice.name} is the one I already used."
+
+    if waiting["kind"] == "file":
+        request["path"] = choice
+        return to_person(request)
+
+    return deliver([choice], request)
 
 # ---- ready to send: the WhatsApp app does the sending when you press Enter ----
 
