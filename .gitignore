@@ -19,6 +19,7 @@ data/notes.txt
 data/reminders.*
 data/reminder_service.lock
 data/contacts.*
+data/contact_history.*
 # the WhatsApp link: whoever has this file can send messages as you
 data/whatsapp*
 data/history

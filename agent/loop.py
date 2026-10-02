@@ -1,4 +1,5 @@
 from tools.registry import get_tool
+from tools.whatsapp import answer_pending
 from agent.llm import ask
 import json
 from datetime import datetime
@@ -59,6 +60,12 @@ def decide(user_text,already):
     return final_res
 
 def run(user_text):
+    # "2" or "harsh patel" right after "which one?" finishes that request, without the router
+    answer = answer_pending(user_text)
+
+    if answer is not None:
+        return answer
+
     history = []
 
     for i in range(5):

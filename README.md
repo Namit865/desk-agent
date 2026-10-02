@@ -26,9 +26,10 @@ v1 core is working:
 - Summaries: PDF / Word / text files; long files are split into parts, each part summarized, then one summary from the parts (map → reduce)
 - Recall: ask "what are my notes?" or "any reminders today?" and the router answers from the saved files
 - File conversion, any format to any other it can reach: each converter is one step (png → jpg, jpg → pdf, pdf → docx, mp4 → mp3 …) and a breadth-first search chains steps, so `heic → docx` runs `heic → pdf → docx` with OCR. A failing converter is set aside and the next shortest chain is tried. Missing programs are named (`needs ffmpeg (brew install ffmpeg)`)
-- WhatsApp, from your own number: *"send the pdf abc to rahul on whatsapp"*. The file is found by name like every other tool, the person by name from three places: contacts you saved (`save contact rahul +91 98765 43210`), your phone's contacts that WhatsApp syncs to desk-agent once it is linked, and the Mac's Contacts app. A name that fits two people is never guessed; it asks. Two modes:
+- WhatsApp, from your own number: *"send the pdf abc to rahul on whatsapp"*. The file is found by name like every other tool, the person by name from three places: contacts you saved (`save contact rahul +91 98765 43210`), your phone's contacts that WhatsApp syncs to desk-agent once it is linked, and the Mac's Contacts app. Two modes:
   - **Ready to send** (default): opens the chat in the WhatsApp app with the file attached, and stops. You check it and press Enter, so nothing goes out that you did not see. Uses the official app only
   - **Direct** (say *"send it directly"*): desk-agent is a linked device on your WhatsApp, like WhatsApp Web, and sends by itself. The reply comes only from WhatsApp's server confirming it (`WhatsApp's server confirmed it at 14:03:09`); a timeout says the file *may or may not* have arrived instead of guessing. Stricter on purpose: the file name must match exactly and `abc.pdf` next to `abc.docx` makes it ask which one. Runs in its own process (`tools/whatsapp_link.py`), so a crash in the WhatsApp library cannot take the agent down
+- WhatsApp remembers who you mean. A name that fits two people gets a numbered question, and the answer alone finishes the send: `1`, `the first one`, `dusra`, `harsh patel`, a number, or `cancel` (for 5 minutes; anything else is a new request). Each send is remembered as *words said → number* in `data/contact_history.json`; once you pick the same person twice for the same words (`harsh bhai` and `harsh` count as the same words), it stops asking and says `I picked Harsh Patel because you chose them for 'harsh bhai' before`, with the numbers to switch. A different pick makes it ask again until the new habit is picked twice. Words like *bhai, ben, didi, ji, sir, uncle* are ignored when nobody is saved with them, but words for relatives (*bhabhi, mama*) are not, because they name someone else. When one person has a landline and a mobile, the landline is dropped: WhatsApp needs a mobile number
 - Next: daily use, then a router test set, conversation memory, or a non-CLI front door
 
 
@@ -129,7 +130,7 @@ desk-agent/
     voices/        # Piper .onnx voice files (local; usually gitignored)
   data/
     notes.txt, reminders.db, reminders.log   # personal, kept out of git
-    contacts.json, whatsapp.db               # saved numbers and the WhatsApp link, kept out of git
+    contacts.json, contact_history.json, whatsapp.db   # saved numbers, who each name meant, the WhatsApp link; kept out of git
     research/      # site_contents, conclusion, final_research (runtime)
     summaries/     # last summary per file (runtime)
     history/       # saved research answers (runtime)

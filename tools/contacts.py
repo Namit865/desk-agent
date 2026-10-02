@@ -1,6 +1,7 @@
 from pathlib import Path
 from collections import namedtuple
 from contextlib import closing
+from datetime import datetime
 import json
 import locale
 import os
@@ -17,11 +18,19 @@ base_dir = Path(__file__).parent.parent
 #   1. names you saved with "save contact xyz +91 98765 43210" (data/contacts.json)
 #   2. your phone's contacts, which WhatsApp syncs to the linked desk-agent (data/whatsapp.db)
 #   3. the Mac's Contacts app, asked only when 1 and 2 know nobody by that name
-# A name that fits more than one number is never guessed: the user is asked which one.
+# A name that fits more than one number is not guessed: the user is asked which one, and the
+# answer is remembered. Once the same person is picked twice for the same words ("harsh bhai"),
+# those words mean that person and the question stops.
 
 DATA = base_dir / "data"
 CONTACTS_PATH = DATA / "contacts.json"
+HISTORY_PATH = DATA / "contact_history.json"   # who each name meant, every time something was sent
 WHATSAPP_DB = DATA / "whatsapp.db"     # the linked device's session, written by tools/whatsapp_link.py
+LEARN_AFTER = 2         # picks of the same person for the same words before the question stops
+KEEP_HISTORY = 1000     # most recent sends remembered; older ones fall away, so habits can change
+# said after a name, these mean the person themselves: "harsh bhai" is Harsh. Words for a relative
+# ("bhabhi" is Harsh's wife, "mama" an uncle) are left out on purpose: they name someone else.
+HONORIFICS = {"bhai", "bhaiya", "bhaiyya", "ben", "behen", "didi", "ji", "sir", "madam", "maam", "uncle", "aunty", "auntie", "bro"}
 
 Person = namedtuple("Person", "name number source")   # number is international: +919876543210
 
@@ -200,54 +209,99 @@ def covers(query, name):
 
     return all(any(word.startswith(part) for word in name_words) for part in said)
 
-def pick(query, people):
-    # (person, None) for one clear match, (None, question) for several, (None, None) for nobody
-    exact = [person for person in people if words(person.name) == words(query)]
-    matches = exact or [person for person in people if covers(query, person.name)]
+def landline(number):
+    return phonenumbers.number_type(phonenumbers.parse(number)) == phonenumbers.PhoneNumberType.FIXED_LINE
 
+def spoken_forms(query):
+    # the words as said, then without "bhai", "ben", "ji"...: tried only if the first finds nobody
+    plain = [word for word in words(query) if word not in HONORIFICS]
+
+    return [query] + ([" ".join(plain)] if plain and plain != words(query) else [])
+
+def matching(query, people):
+    # everyone who fits, each number once; exact names beat partial ones
+    exact = [person for person in people if words(person.name) == words(query)]
+    found = exact or [person for person in people if covers(query, person.name)]
     by_number = {}
 
-    for person in matches:
+    for person in found:
         by_number.setdefault(person.number, person)   # the same number from two places is one person
 
-    if len(by_number) == 1:
-        return next(iter(by_number.values())), None
+    found = list(by_number.values())
+    # WhatsApp needs a mobile number: a landline goes when there is another number to use
+    mobiles = [person for person in found if not landline(person.number)]
 
-    if len(by_number) > 1:
-        options = ", ".join(f"{person.name} ({pretty(person.number)})" for person in list(by_number.values())[:6])
-        return None, f"More than one person fits '{query}': {options}. Say the full name or the number."
+    return mobiles if len(found) > 1 and mobiles else found
 
-    return None, None
-
-def find_person(query):
-    # (Person, None) or (None, message for the user)
+def find_people(query):
+    # ([everyone who fits], None), or ([], message for the user)
     query = " ".join(str(query).split())
 
     if re.fullmatch(r"\+?[\d\s().-]{6,}", query):
         number = normalize_number(query, home_region())
 
         if number is None:
-            return None, f"{query} is not a phone number I can use. Say it with the country code, like +91 98765 43210."
+            return [], f"{query} is not a phone number I can use. Say it with the country code, like +91 98765 43210."
 
-        return Person(pretty(number), number, "number"), None
+        return [Person(pretty(number), number, "number")], None
 
     if not words(query):
-        return None, "Tell me who to send it to."
+        return [], "Tell me who to send it to."
 
-    person, question = pick(query, saved_people() + whatsapp_people())
+    known = saved_people() + whatsapp_people()
 
-    if person or question:
-        return person, question
+    for said in spoken_forms(query):
+        people = matching(said, known)
+
+        if people:
+            return people, None
 
     problem = None
 
     if platform.system() == "Darwin":
-        people, problem = mac_people(query)
-        person, question = pick(query, people)
+        found, problem = mac_people(spoken_forms(query)[-1])
 
-        if person or question:
-            return person, question
+        for said in spoken_forms(query):
+            people = matching(said, found)
+
+            if people:
+                return people, None
 
     reply = f"I don't have a number for {query}. Tell me once: save contact {query} +91 98765 43210 (with their real number)."
 
-    return None, reply + (f" (I could not look in your Mac's contacts: {problem}.)" if problem else "")
+    return [], reply + (f" (I could not look in your Mac's contacts: {problem}.)" if problem else "")
+
+def said_key(query):
+    # "Harsh Bhai", "harsh bhai" and "harsh" are the same words to remember
+    plain = [word for word in words(query) if word not in HONORIFICS]
+
+    return " ".join(plain or words(query))
+
+def load_history():
+    try:
+        history = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return []
+
+    return history if isinstance(history, list) else []
+
+def remember(query, person):
+    # one line per send: the words said and the number they meant
+    entry = {"said": said_key(query), "number": person.number, "name": person.name, "when": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    history = load_history()[-(KEEP_HISTORY - 1):] + [entry]
+
+    DATA.mkdir(exist_ok=True)
+    temporary = HISTORY_PATH.with_suffix(".tmp")
+    temporary.write_text(json.dumps(history, indent=1, ensure_ascii=False), encoding="utf-8")
+    os.replace(temporary, HISTORY_PATH)
+
+def usual(query, people):
+    # the person these words meant last time, if they meant them at least LEARN_AFTER times;
+    # a different pick last time means the habit changed, so ask again
+    numbers = {person.number: person for person in people}
+    picks = [entry.get("number") for entry in load_history() if entry.get("said") == said_key(query) and entry.get("number") in numbers]
+
+    if picks and picks.count(picks[-1]) >= LEARN_AFTER:
+        return numbers[picks[-1]]
+
+    return None
