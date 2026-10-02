@@ -118,10 +118,10 @@ def show_reminder(text):
 
     return f"Reminder shown: {text}"
 
-def take_lock():
+def take_lock(path=LOCK_PATH):
     # an open file the OS locks for this process; the OS lets go when the process ends, even on a crash
     DATA.mkdir(exist_ok=True)
-    handle = open(LOCK_PATH, "a+")
+    handle = open(path, "a+")
 
     try:
         if platform.system() == "Windows":
