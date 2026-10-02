@@ -1,5 +1,10 @@
 from agent.loop import run
+from tools.reminder import keep_service_running, pending
 from tools.voice import listen_once, speak
+
+# reminders waiting to be shown need the service; after an update it may not be running yet
+if pending():
+    keep_service_running()
 
 mode = "text"
 

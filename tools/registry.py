@@ -4,6 +4,8 @@ from tools.files import open_file
 from tools.research import run_research
 from tools.documents import pdf_to_word, summarize_document
 from tools.convert import convert_file
+from tools.contacts import save_contact
+from tools.whatsapp import send_whatsapp, link_whatsapp
 
 # parameters: keys the loop reads from the model's JSON, passed in this order
 # optional: keys passed by name only when the model sent them
@@ -61,6 +63,25 @@ tools = {
         "description" : "Convert a file to another format (images, pdf, office, text, data, audio, video)",
         "parameters" : ["text", "to"],
         "function" : convert_file
+    },
+    # final: the reply says exactly whether it was sent or only opened, so no model rewords it
+    "send_whatsapp" : {
+        "description" : "Send a file or a message to a person on WhatsApp",
+        "parameters" : ["text", "to"],
+        "optional" : ["message", "direct"],
+        "function" : send_whatsapp,
+        "final" : True
+    },
+    "save_contact" : {
+        "description" : "Save a person's phone number",
+        "parameters" : ["text", "number"],
+        "function" : save_contact
+    },
+    "link_whatsapp" : {
+        "description" : "Link desk-agent to the user's WhatsApp by scanning a code",
+        "parameters" : [],
+        "function" : link_whatsapp,
+        "final" : True
     }
 }
 

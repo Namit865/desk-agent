@@ -17,3 +17,5 @@ Pillow
 pillow-heif # iPhone HEIC photos
 openpyxl
 markdown
+phonenumbers # reads phone numbers in any country's format
+neonize # WhatsApp "send directly"; on a Mac also needs: brew install libmagic
