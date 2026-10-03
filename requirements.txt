@@ -2,6 +2,7 @@ google-genai
 python-dotenv
 requests
 ddgs
+trafilatura # research: the article text of a web page, without menus and footers
 win11toast; sys_platform == "win32"
 groq
 SpeechRecognition

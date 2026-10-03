@@ -12,7 +12,8 @@ groq_api_key = os.environ.get("GROQ_API_KEY")
 if not groq_api_key:
     groq_client = None
 else:
-    groq_client = Groq(api_key = groq_api_key)
+    # on "too many requests" Groq says how long to wait; wait and retry up to 5 times before falling back
+    groq_client = Groq(api_key = groq_api_key, max_retries = 5)
 
 gemini_api_key = os.environ.get("GEMINI_API_KEY")
 
@@ -42,9 +43,11 @@ def ask_local(prompt):
         "model" : "qwen2.5:14b",
         "prompt" : prompt,
         "stream" : False,
+        # Ollama's default context is a few thousand tokens and silently cuts longer prompts
+        "options" : {"num_ctx" : 8192},
     }
 
-    response = requests.post(url, json=payload)
+    response = requests.post(url, json=payload, timeout=600)
 
     response.raise_for_status()
 

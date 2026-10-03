@@ -14,7 +14,7 @@ v1 core is working:
 - CLI: `python main.py` — type a request, or `exit` to quit
 - Chat: if no tool is needed, router returns `done` with a normal helpful answer (not tools-only)
 - Voice: type `listen` for mic mode (Groq Whisper, English-locked → same `run` loop); say `text` to return to keyboard; Piper TTS (loaded once) speaks every reply and Enter skips it mid-sentence; silence times out instead of crashing
-- Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
+- Research in rounds, like a person: the model splits the question into sub-questions and searches → pages from different sites are read at the same time (article text only via `trafilatura`, PDFs too; video and login sites skipped) → a long page is cut to the parts about the question with BM25, the classic search-engine score → the model takes notes, each tagged with its source → it checks which sub-questions are answered and searches for what is missing (up to 3 rounds) → the answer cites a source after every claim (`[2]`), and a citation of a page never read is removed. Page text is passed as material, not instructions, so a page saying "ignore previous instructions" cannot steer it. With no readable page it says so instead of answering from nothing. Each answer is saved as a report with its sources and every note in `data/research/`
 - Reminders: saved in a small SQLite database (`data/reminders.db`); one **background service** (`tools/reminder_service.py`) checks it every 5 seconds and shows what is due. The service starts at login (macOS launchd agent, Windows Run entry, Linux autostart), so reminders **survive restarts**; one that fell due while the computer was off shows as `Missed at 18:00 on 30 Sep: …`. One copy runs at a time (OS file lock); `data/reminders.log` records what was shown. An old `data/reminders.txt` is imported once and kept as `reminders.txt.imported`
 - Open by name: say `open downloads` or `open desk-agent` — no paths. Resolves in layers: known places (`Downloads`, `Desktop`, …) → literal path → search. Search uses Spotlight on macOS and a depth-capped walk of the home folder elsewhere (also the macOS fallback when Spotlight finds nothing). Results are ranked by exact name, then shallowest, then most recent; two folders with the same name means it lists them and asks instead of guessing
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`; a tool call missing a parameter (e.g. `when`) is refused before it runs
@@ -39,7 +39,7 @@ v1 core is working:
 - Save notes → `data/notes.txt`
 - Set reminders → `data/reminders.db` + native OS notification (fires after you quit `main.py`, and after a restart)
 - Open a folder by name, not by path (Spotlight on macOS, home-folder walk on Windows/Linux)
-- Deep research a topic → `data/research/` + history under `data/history/`
+- Deep research a topic → a cited answer in the terminal, a report in `data/research/`, history under `data/history/`
 - Convert a PDF to an editable Word file next to it (`report.pdf` → `report.docx`)
 - Summarize a PDF, Word, text or markdown file → answer in the terminal + `data/summaries/`
 - Read back notes and upcoming reminders
@@ -49,7 +49,7 @@ v1 core is working:
 
 Example: *"save a note that I need to call mom and remind me at 6pm"* → note tool + reminder tool → short confirmation.
 
-Example: *"research a PyTorch learning roadmap from math basics"* → `deep_research` → final answer in the terminal / `final_research.txt`.
+Example: *"research a PyTorch learning roadmap from math basics"* → `deep_research` → `Short answer: start with linear algebra [1], then calculus and the chain rule [2][3]…`, the sources it cites, and `Full report with all notes: data/research/2026-10-03-1412-research-a-pytorch-learning-roadmap.md`.
 
 Example: *"convert my resume pdf to word"* → `pdf_to_word` → `Converted resume.pdf to ~/Downloads/resume.docx (exact layout, 2 pages, 100.0% text match, 0 of 612 words changed)`.
 
@@ -131,7 +131,7 @@ desk-agent/
   data/
     notes.txt, reminders.db, reminders.log   # personal, kept out of git
     contacts.json, contact_history.json, whatsapp.db   # saved numbers, who each name meant, the WhatsApp link; kept out of git
-    research/      # site_contents, conclusion, final_research (runtime)
+    research/      # one report per research: answer, sources, what is still unknown, all notes (runtime)
     summaries/     # last summary per file (runtime)
     history/       # saved research answers (runtime)
 ```
@@ -146,7 +146,7 @@ desk-agent/
 | save note     | done   | append text to `data/notes.txt`                                         |
 | reminder      | done   | saved in SQLite; background service shows it, survives restarts         |
 | open file     | done   | open a folder by name; asks when the name is ambiguous                  |
-| deep research | done   | search → fetch sites → conclusions → enough? → final answer             |
+| deep research | done   | plan → search → read → notes with sources → what is missing? → cited answer |
 | read notes    | done   | read back `data/notes.txt`, router answers from it                      |
 | list reminders| done   | reminders not yet shown, sorted; overdue ones marked                     |
 | pdf to word   | done   | find PDF → OCR if scanned → remove shadows → flowing or exact layout → text match |
@@ -163,7 +163,7 @@ desk-agent/
 
 - Python
 - LLM: Groq (primary) + Ollama local fallback (`qwen2.5:14b`)
-- Web search: `ddgs`
+- Web search: `ddgs`; page text: `trafilatura`
 - Conversion: Pillow + `pillow-heif` (pictures), `openpyxl` (Excel), `markdown`, ffmpeg (audio / video), office apps when present
 - Documents: `pdf2docx` + PyMuPDF (PDF → Word), `pikepdf` (shadow cleanup), `ocrmypdf` + Tesseract (OCR), `python-docx` (Word files), Microsoft Word via `pywin32` on Windows
 - WhatsApp: the official app (ready to send); `neonize` linked device (direct); `phonenumbers` for numbers
