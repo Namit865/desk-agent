@@ -43,6 +43,7 @@ while True:
 
     result = run(user_text)
 
-    speak(result)
+    # research ends with its source list: printed below, not read aloud web address by web address
+    speak(result.split("\n\nSources:")[0])
 
     print("Agent: ",result)
