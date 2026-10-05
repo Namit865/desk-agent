@@ -43,9 +43,9 @@ def decide(user_text,already):
         14. For pdf_to_word, layout is "exact" when they want it to look exactly like the PDF (keep the design), "flow" when they want normal reflowing text to edit, else "auto".
         15. To turn any other file into another format use convert_file (png to jpg, jpg to pdf, docx to pdf, heic to jpg, xlsx to csv, mp4 to mp3). A PDF to Word goes to pdf_to_word.
         16. After convert_file, reply done with where the new file was saved and any note from the result.
-        17. For send_whatsapp, text is only the file name ("send the pdf named abc to rahul" -> text "abc pdf"), to is the person exactly as the user said it, message is only words the user wants sent to them.
+        17. For send_whatsapp, text is only the file name or what describes the file, never the person or "whatsapp"; to is the person as the user said it, and "me" when they send it to themselves (me, myself, my number, mujhe, khud ko); message is only words the user wants sent to them. Examples: "send the pdf named abc to rahul" -> text "abc pdf", to "rahul". "abc wali pdf harsh ko whatsapp kar do" -> text "abc pdf", to "harsh". "send my latest download to myself" -> text "latest download", to "me". "send the newest screenshot to mom" -> text "newest screenshot", to "mom".
         18. direct is true only when the user says to send it directly, automatically or without opening WhatsApp. Otherwise direct is false.
-        19. "save rahul's number +91 98765 43210" -> save_contact. "link my whatsapp" -> link_whatsapp.
+        19. "save rahul's number +91 98765 43210" -> save_contact. "my number is +91 98765 43210" -> save_contact with text "me". "link my whatsapp" -> link_whatsapp.
 
     User asked this question:
     """ + user_text + f"\n\nCurrent local time is: {now_str}\n" + "Already used tools: " + (already if already else "none"))

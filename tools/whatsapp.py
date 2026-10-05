@@ -3,6 +3,7 @@ from contextlib import closing
 from urllib.parse import quote
 import json
 import os
+import re
 import platform
 import sqlite3
 import subprocess
@@ -11,8 +12,8 @@ import tempfile
 import time
 import webbrowser
 
-from tools.contacts import (HONORIFICS, LEARN_AFTER, WHATSAPP_DB, covers, find_people, home_region,
-                            normalize_number, pretty, remember, usual, words)
+from tools.contacts import (HONORIFICS, LEARN_AFTER, WHATSAPP_DB, Person, covers, find_people, home_region, is_self,
+                            my_numbers, normalize_number, pretty, remember, save_contact, usual, words)
 from tools.whatsapp_link import forget_link
 from tools.files import clean_file_name, name_key, resolve_file
 
@@ -46,6 +47,13 @@ KIND_WORDS = {
     "zip": [".zip"], "txt": [".txt"],
 }
 ANY_TYPE = SEND_TYPES + [".pages", ".numbers", ".key", ".md", ".html", ".json", ".xml"]
+# words around a file name that are not part of it: "the file named abc", "abc wali pdf", "abc on whatsapp"
+FILE_EXTRAS = {"named", "called", "name", "wali", "wala", "vali", "vala", "waali", "waala", "this", "that",
+               "on", "via", "whatsapp", "send", "to", "ko", "pe"}
+# "my latest download", "the last pdf", "newest screenshot": no name, just the newest file
+NEWEST = {"latest", "last", "newest", "recent", "recently", "just", "new"}
+FOLDERS = {"download": "Downloads", "downloads": "Downloads", "downloaded": "Downloads", "desktop": "Desktop", "documents": "Documents"}
+SCREENSHOTS = {"screenshot", "screenshots", "ss"}
 
 # a question ("which Harsh?") keeps the request it came from this long, so a short answer finishes it
 ANSWER_WITHIN = 300     # seconds
@@ -110,21 +118,34 @@ def find_file(name, direct):
 
     kept = []
     extensions = []
+    several = len(said.split()) > 1
 
     for word in said.split():
-        kind = KIND_WORDS.get(word.lower().strip(".,!?"))
+        bare = word.lower().strip(".,!?")
+        kind = KIND_WORDS.get(bare)
 
-        if kind and len(said.split()) > 1:
+        if kind and several:
             extensions += [ext for ext in kind if ext not in extensions]
-        else:
+        elif bare not in FILE_EXTRAS or not several:
             kept.append(word)
 
     if typed in ANY_TYPE:
         extensions = [ext for ext in ANY_TYPE if ext == typed or {ext, typed} == {".jpg", ".jpeg"}]
 
+    bare = [word.lower().strip(".,!?") for word in kept]
+    named = [word for word in bare if word not in NEWEST | SCREENSHOTS | set(FOLDERS) | {"file", "my", "the", "one", "i"}]
+
+    # nothing said but "latest", a folder or "screenshot": the newest such file
+    if not named and set(bare) & (NEWEST | SCREENSHOTS):
+        return newest_file(bare, extensions)
+
     extensions = extensions or SEND_TYPES
     name = " ".join(kept)
     path, message = resolve_file(name, extensions)
+
+    if path is None and (message or "").startswith("no such file"):
+        return None, (f"I couldn't find a file called '{name}' in your folders. Say a word from its name "
+                      "(like: send the bank statement pdf to me), or: send my latest download to me."), []
 
     if path is None:
         # "Found multiple files with that name..." / "did you mean:" followed by one path per line
@@ -148,6 +169,33 @@ def find_file(name, direct):
         return None, f"There are {len(options)} files named {path.stem}:\n{numbered(options)}\nWhich one? Say 1, 2... or its type.", options
 
     return path, None, []
+
+def screenshot_folder():
+    # macOS saves screenshots on the Desktop unless the user chose another folder
+    if platform.system() == "Darwin":
+        chosen = subprocess.run(["defaults", "read", "com.apple.screencapture", "location"], capture_output=True, text=True).stdout.strip()
+
+        if chosen and Path(chosen).expanduser().is_dir():
+            return Path(chosen).expanduser()
+
+    return Path.home() / ("Pictures/Screenshots" if platform.system() == "Windows" else "Desktop")
+
+def newest_file(said, extensions):
+    screenshot = bool(set(said) & SCREENSHOTS)
+    named_folder = [FOLDERS[word] for word in said if word in FOLDERS]
+    folder = Path.home() / named_folder[0] if named_folder else (screenshot_folder() if screenshot else Path.home() / "Downloads")
+    types = extensions or (IMAGES if screenshot else SEND_TYPES)
+
+    try:
+        files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in types and not f.name.startswith(".")
+                 and (not screenshot or f.name.lower().startswith(("screenshot", "screen shot")))]
+    except OSError:
+        files = []
+
+    if not files:
+        return None, f"There is no {'screenshot' if screenshot else 'file of that kind'} in {folder}.", []
+
+    return max(files, key=lambda f: f.stat().st_mtime), None, []
 
 def chat_link(number, message, web=False):
     digits = number.lstrip("+")
@@ -183,6 +231,14 @@ def to_person(request):
     if path and path.stat().st_size > MAX_SIZE:
         return f"{path.name} is larger than 2 GB, which is the most WhatsApp takes."
 
+    if is_self(request["to"]):
+        people = my_numbers()
+
+        if not people:
+            return ask("my number", [], request, "What is your own WhatsApp number? Reply with it, like +91 98765 43210. I'll remember it.")
+
+        return deliver(people, request)
+
     people, problem = find_people(request["to"])
 
     if not people:
@@ -212,7 +268,7 @@ def deliver(people, request):
     if not reply.startswith(DELIVERED):
         return reply
 
-    if person.source != "number":
+    if person.source != "number" and not is_self(to):
         remember(to, person)
 
     if learned:
@@ -271,6 +327,20 @@ def answer_pending(text):
     if " ".join(words(text)) in CANCEL:
         return "Okay, I won't send it."
 
+    if waiting["kind"] == "my number":
+        # the user's own number, asked once: saved as "me", then the send goes on
+        number = normalize_number(text, home_region()) if re.fullmatch(r"\s*\+?[\d\s().-]{6,}\s*", text) else None
+
+        if number is None:
+            if any(ch.isdigit() for ch in text):
+                pending = waiting
+                return "That doesn't look like a phone number. Say it with the country code, like +91 98765 43210."
+
+            return None
+
+        save_contact("me", number)
+        return deliver([Person("yourself", number, "saved")], dict(waiting["request"]))
+
     choice = chosen(text, waiting["options"], waiting["kind"])
 
     if choice == "out of range":
@@ -288,6 +358,9 @@ def answer_pending(text):
     if waiting["kind"] == "file":
         request["path"] = choice
         return to_person(request)
+
+    if is_self(request["to"]):
+        save_contact("me", choice.number)     # which of your numbers is your WhatsApp: asked only once
 
     return deliver([choice], request)
 
