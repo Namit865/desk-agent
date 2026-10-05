@@ -1,5 +1,6 @@
 import importlib.util
 import logging
+import os
 import platform
 import re
 import shutil
@@ -20,7 +21,7 @@ from tools.files import resolve_file
 from tools.fonts import fit_fonts, pdf_font_kinds
 from tools.pdf_clean import name_unknown_letters, remove_shadows
 
-OCR_LANGUAGE = "eng"   # tesseract codes, "eng+hin" reads two languages
+OCR_LANGUAGE = "eng"   # for naming joined Latin letters ("Th", "fi"); scans use the alphabet they are written in (tools/ocr.py)
 SCAN_MAX_WORDS = 10    # a page with fewer words than this...
 SCAN_MIN_COVER = 0.5   # ...and images over half its area is a scan
 LOW_MATCH = 98         # text match below this means the Word file needs a look
@@ -110,19 +111,39 @@ def page_list(numbers):
     shown = ", ".join(str(n) for n in numbers[:10])
     return ("page " if len(numbers) == 1 else "pages ") + shown + (" ..." if len(numbers) > 10 else "")
 
+def page_picture(pdf_path, number=0, dpi=200):
+    from PIL import Image
+
+    with pymupdf.open(pdf_path) as doc:
+        pix = doc[number].get_pixmap(dpi=dpi, alpha=False)
+
+    return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+
 def run_ocr(pdf_path, out_path):
     # returns None when OCR worked, else the reason it could not run
+    from tools.ocr import choose_languages, tesseract_path
+
     if importlib.util.find_spec("ocrmypdf") is None:
         return "ocrmypdf is not installed (pip install ocrmypdf, plus tesseract)"
+
+    # Gujarati read with the English pack comes out as Latin look-alikes: read the scan in its own alphabet
+    languages, problem = choose_languages(page_picture(pdf_path, dpi=150))
+
+    if problem:
+        return problem
+
+    # ocrmypdf finds tesseract on PATH, which apps started from the Dock or an IDE may lack
+    env = dict(os.environ)
+    env["PATH"] = str(Path(tesseract_path()).parent) + os.pathsep + env.get("PATH", "")
 
     # own process: ocrmypdf uses multiprocessing, which would re-run main.py on macOS and Windows
     command = [
         sys.executable, "-m", "ocrmypdf",
         "--force-ocr", "--rotate-pages", "--deskew",
-        "--output-type", "pdf", "--language", OCR_LANGUAGE, "--quiet",
+        "--output-type", "pdf", "--language", languages, "--quiet",
         str(pdf_path), str(out_path),
     ]
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True, env=env)
 
     if result.returncode != 0:
         error = result.stderr.strip()
@@ -277,6 +298,14 @@ def write_word(pdf_path, docx_path, layout="auto"):
         hidden_text = False
         shadows = 0
 
+        # a scan asked for in exact layout: each page stays a picture, its words go where they stand
+        if scanned and len(scanned) * 2 >= page_count and layout == "exact":
+            from tools.image_word import write_image_docx
+
+            print(f"Reading {plural(page_count, 'scanned page')} into exact layout...")
+            details, notes = write_image_docx([page_picture(pdf_path, n) for n in range(page_count)], docx_path)
+            return "exact layout, " + details, notes
+
         # pdf2docx reads visible or invisible text, never both, so a mostly scanned
         # PDF gets OCR on every page (typed ones too) and only that layer is read
         if scanned and len(scanned) * 2 >= page_count:
@@ -285,9 +314,12 @@ def write_word(pdf_path, docx_path, layout="auto"):
             error = run_ocr(pdf_path, ocr_path)
 
             if error is None:
+                from tools.ocr import packs_note
+
                 source = ocr_path
                 hidden_text = True
                 notes.append("scanned PDF, text read with OCR")
+                notes += [note for note in [packs_note()] if note]
             else:
                 notes.append(f"scanned PDF, text stays as pictures because OCR failed: {error}")
 
@@ -328,8 +360,8 @@ def write_word(pdf_path, docx_path, layout="auto"):
             if shadows:
                 notes.append(f"removed {plural(shadows, 'shadow')} Word cannot draw")
 
-            if hidden_text and layout == "exact":
-                notes.append("scanned PDFs only convert as flowing text")
+            if hidden_text:
+                notes.append("ask for exact layout to keep every word where it stands on the page")
 
         # fonts this computer lacks become installed ones of the same kind, or Pages reports them missing
         fit_fonts(docx_path, pdf_font_kinds(source))

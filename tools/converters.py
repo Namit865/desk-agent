@@ -158,8 +158,15 @@ def pdf_to_images(src, dst):
 
     return written, ([f"{len(written)} pages, one picture each"] if len(written) > 1 else [])
 
+def image_to_docx(src, dst):
+    # the picture stays as the page, its words become text boxes where they stand (tools/image_word.py)
+    from tools.image_word import image_to_docx as convert
+
+    return convert(src, dst)
+
 edges(IMAGES, IMAGES, image_to_image)
 edges(IMAGES, ["pdf"], image_to_pdf)
+edges(IMAGES, ["docx"], image_to_docx)
 edges(["pdf"], ["png", "jpg"], pdf_to_images)
 
 # ---------- documents (PyMuPDF, python-docx, markdown) ----------

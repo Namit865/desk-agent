@@ -4,6 +4,7 @@ from tools.files import open_file
 from tools.research import run_research
 from tools.documents import pdf_to_word, summarize_document
 from tools.convert import convert_file
+from tools.edit_file import edit_file
 from tools.contacts import save_contact
 from tools.whatsapp import send_whatsapp, link_whatsapp
 
@@ -70,6 +71,14 @@ tools = {
         "parameters" : ["text", "to"],
         "optional" : ["message", "direct"],
         "function" : send_whatsapp,
+        "final" : True
+    },
+    # final: the reply lists exactly what changed and how it reads back
+    "edit_file" : {
+        "description" : "Change words inside a picture or PDF and save the finished picture or PDF",
+        "parameters" : ["text", "instruction"],
+        "optional" : ["to"],
+        "function" : edit_file,
         "final" : True
     },
     "save_contact" : {

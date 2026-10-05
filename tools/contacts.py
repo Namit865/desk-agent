@@ -31,6 +31,21 @@ KEEP_HISTORY = 1000     # most recent sends remembered; older ones fall away, so
 # said after a name, these mean the person themselves: "harsh bhai" is Harsh. Words for a relative
 # ("bhabhi" is Harsh's wife, "mama" an uncle) are left out on purpose: they name someone else.
 HONORIFICS = {"bhai", "bhaiya", "bhaiyya", "ben", "behen", "didi", "ji", "sir", "madam", "maam", "uncle", "aunty", "auntie", "bro"}
+# words around a name that are not part of it: "harsh ko", "rahul on whatsapp", "to mom please"
+AROUND_NAME = {"to", "ko", "on", "in", "whatsapp", "pe", "par", "via", "please", "pls", "send", "bhej", "bhejo", "do", "de", "chat"}
+# "me", "myself", "my number", "mujhe", "khud ko", "apne aap ko": the user themselves
+SELF_WORDS = {"me", "myself", "self", "mine", "yourself", "khud", "mujhe", "apne", "apna", "mere", "mera", "meri"}
+SELF_FILLER = AROUND_NAME | {"number", "own", "the", "my", "aap", "account", "phone"}
+
+MY_CARD = '''
+tell application "Contacts"
+    set answer to ""
+    repeat with theNumber in (phones of my card)
+        set answer to answer & (value of theNumber) & linefeed
+    end repeat
+end tell
+return answer
+'''
 
 Person = namedtuple("Person", "name number source")   # number is international: +919876543210
 
@@ -209,6 +224,58 @@ def covers(query, name):
 
     return all(any(word.startswith(part) for word in name_words) for part in said)
 
+def is_self(query):
+    said = words(query)
+    core = [word for word in said if word not in SELF_FILLER]
+
+    # "my number" and "my whatsapp" have nothing left but are still the user
+    return all(word in SELF_WORDS for word in core) if core else "my" in said
+
+def my_numbers():
+    # the user's own number: saved as "me", else the linked WhatsApp account, else the Mac's My Card
+    saved = [person for person in saved_people() if is_self(person.name)]
+
+    if saved:
+        return [Person("yourself", saved[-1].number, "saved")]
+
+    try:
+        with closing(sqlite3.connect(WHATSAPP_DB, timeout=5)) as db:
+            jid = db.execute("SELECT jid FROM whatsmeow_device").fetchone() if WHATSAPP_DB.exists() else None
+    except sqlite3.Error:
+        jid = None
+
+    linked = normalize_number("+" + jid[0].split("@")[0].split(":")[0].split(".")[0]) if jid else None
+
+    if linked:
+        return [Person("yourself", linked, "WhatsApp")]
+
+    if platform.system() != "Darwin":
+        return []
+
+    try:
+        card = subprocess.run(["osascript", "-e", MY_CARD], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+
+    region = home_region()
+    numbers = []
+
+    for line in card.stdout.splitlines() if card.returncode == 0 else []:
+        number = normalize_number(line, region)
+
+        if number and number not in numbers:
+            numbers.append(number)
+
+    mobiles = [number for number in numbers if not landline(number)] or numbers
+
+    return [Person("yourself", number, "Contacts") for number in mobiles]
+
+def without_extras(query):
+    # "harsh ko" -> "harsh", "rahul on whatsapp" -> "rahul"; a name made only of such words stays as it is
+    kept = [word for word in str(query).split() if word.lower().strip(".,!?") not in AROUND_NAME]
+
+    return " ".join(kept) or str(query)
+
 def landline(number):
     return phonenumbers.number_type(phonenumbers.parse(number)) == phonenumbers.PhoneNumberType.FIXED_LINE
 
@@ -235,7 +302,7 @@ def matching(query, people):
 
 def find_people(query):
     # ([everyone who fits], None), or ([], message for the user)
-    query = " ".join(str(query).split())
+    query = without_extras(" ".join(str(query).split()))
 
     if re.fullmatch(r"\+?[\d\s().-]{6,}", query):
         number = normalize_number(query, home_region())

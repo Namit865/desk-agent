@@ -14,6 +14,11 @@ from tools.files import resolve_file
 EXTENSION_ALIASES = {"jpeg": "jpg", "jpe": "jpg", "tif": "tiff", "htm": "html", "markdown": "md", "heif": "heic"}
 NAME_ALIASES = {"text": "txt", "word": "docx", "excel": "xlsx", "powerpoint": "pptx", "keynote": "key"}
 MAX_TRIES = 6
+# "the volleyball image", "my resume pdf", "the photo in downloads": type words limit the search to
+# that type, place words are not part of the name
+KIND_WORDS = {"image": "picture", "images": "picture", "photo": "picture", "photos": "picture", "picture": "picture",
+              "pic": "picture", "pics": "picture", "screenshot": "picture", "poster": "picture"}
+PLACE_WORDS = {"in", "from", "on", "at", "downloads", "download", "desktop", "documents", "folder"}
 
 class StepFailed(Exception):
     def __init__(self, edge, error):
@@ -96,6 +101,16 @@ def convert_file(name, to):
     extensions = [f".{fmt}" for fmt in sorted(sources - {target})]
     extensions += [f".{alias}" for alias, fmt in EXTENSION_ALIASES.items() if fmt in sources and fmt != target]
     typed = format_of(Path(name.strip()).suffix) if Path(name.strip()).suffix else None
+    said = name.split()
+    kept = [word for word in said if word.lower().strip(".,!?") not in set(KIND_WORDS) | PLACE_WORDS]
+
+    if kept and len(kept) < len(said):
+        if any(KIND_WORDS.get(word.lower().strip(".,!?")) == "picture" for word in said):
+            from tools.converters import IMAGES
+            pictures = [ext for ext in extensions if format_of(ext) in IMAGES]
+            extensions = pictures or extensions
+
+        name = " ".join(kept)
 
     # a name said with its type ("logo.png") means that type only
     if typed in sources:

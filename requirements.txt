@@ -2,13 +2,14 @@ google-genai
 python-dotenv
 requests
 ddgs
+trafilatura # research: the article text of a web page, without menus and footers
 win11toast; sys_platform == "win32"
 groq
 SpeechRecognition
 pyaudio
 piper-tts
 pdf2docx
-pymupdf>=1.24.3
+pymupdf>=1.25.0
 python-docx
 ocrmypdf # only for scanned PDFs, also needs tesseract (brew install tesseract)
 pikepdf
@@ -17,5 +18,6 @@ Pillow
 pillow-heif # iPhone HEIC photos
 openpyxl
 markdown
+opencv-python-headless # pictures to Word: takes the old text out of the picture (pdf2docx needs it too)
 phonenumbers # reads phone numbers in any country's format
 neonize # WhatsApp "send directly"; on a Mac also needs: brew install libmagic

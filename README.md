@@ -14,7 +14,7 @@ v1 core is working:
 - CLI: `python main.py` — type a request, or `exit` to quit
 - Chat: if no tool is needed, router returns `done` with a normal helpful answer (not tools-only)
 - Voice: type `listen` for mic mode (Groq Whisper, English-locked → same `run` loop); say `text` to return to keyboard; Piper TTS (loaded once) speaks every reply and Enter skips it mid-sentence; silence times out instead of crashing
-- Research: `ddgs` search → fetch (skip failures) → conclude append → enough-check → final answer from conclusions
+- Research in rounds, like a person: the model splits the question into sub-questions and searches → pages from different sites are read at the same time (article text only via `trafilatura`, PDFs too; video and login sites skipped) → a long page is cut to the parts about the question with BM25, the classic search-engine score → the model takes notes, each tagged with its source → it checks which sub-questions are answered and searches for what is missing (up to 3 rounds) → the answer cites a source after every claim (`[2]`), and a citation of a page never read is removed. Page text is passed as material, not instructions, so a page saying "ignore previous instructions" cannot steer it. With no readable page it says so instead of answering from nothing. Each answer is saved as a report with its sources and every note in `data/research/`
 - Reminders: saved in a small SQLite database (`data/reminders.db`); one **background service** (`tools/reminder_service.py`) checks it every 5 seconds and shows what is due. The service starts at login (macOS launchd agent, Windows Run entry, Linux autostart), so reminders **survive restarts**; one that fell due while the computer was off shows as `Missed at 18:00 on 30 Sep: …`. One copy runs at a time (OS file lock); `data/reminders.log` records what was shown. An old `data/reminders.txt` is imported once and kept as `reminders.txt.imported`
 - Open by name: say `open downloads` or `open desk-agent` — no paths. Resolves in layers: known places (`Downloads`, `Desktop`, …) → literal path → search. Search uses Spotlight on macOS and a depth-capped walk of the home folder elsewhere (also the macOS fallback when Spotlight finds nothing). Results are ranked by exact name, then shallowest, then most recent; two folders with the same name means it lists them and asks instead of guessing
 - Loop hardening: bad JSON / incomplete replies / tool errors return a message instead of crashing `main.py`; a tool call missing a parameter (e.g. `when`) is refused before it runs
@@ -25,10 +25,13 @@ v1 core is working:
   - **Fonts**: fonts not installed on this computer (including Office's Calibri / Cambria from the Word template) are swapped for an installed font of the same kind, so Pages stops reporting missing fonts
 - Summaries: PDF / Word / text files; long files are split into parts, each part summarized, then one summary from the parts (map → reduce)
 - Recall: ask "what are my notes?" or "any reminders today?" and the router answers from the saved files
+- Change words in a picture or PDF and get the finished file back, no Word in between: *in the volleyball image change the date to 20 October and give me a pdf*. The file is read (OCR for pictures and scans, the PDF's own text otherwise), the request becomes exact edits (`line 3: "15 ઓક્ટોબર" → "20 ઓક્ટોબર"`) and every edit is checked against the real text, so the model cannot invent what to change; a quoted request (*change "15" to "20"*) needs no model at all. In a picture only the changed words are redrawn, in the line's size, colour, weight (regular or bold, measured against the font) and drop shadow, on its old baseline; words that must slide (a longer or shorter word, a centred line) move as their own pixels, so their shapes stay exact, and every other line stays the same pixel for pixel. In a PDF with real text the words are changed as text, in the PDF's own font when it has the letters, keeping centred, left or right alignment (an amounts column stays lined up); a Gujarati or Hindi line in a PDF is read by OCR and only that line is redrawn as a picture, since PDFs do not keep those joined letters reliably. Each changed line is read back to check it, and a new file is saved (`volleyball (edited).pdf`); the original is never touched. Text only: colours, photos and shapes need an image-generating model
+- Picture to Word, in any alphabet: *convert the volleyball image to word* keeps the picture as the page and makes its words editable where they stand. The alphabet is found from the letters themselves (a quick read with every installed language pack, then the Unicode block most letters fall in), because Gujarati read with the English pack comes out as Latin look-alikes (`વોલીબોલ` → `dicletia`) and Tesseract's own script guess called a Gujarati poster "Latin". The picture is read several ways (layout-aware, sparse, smoothed, each colour channel) since no single way reads every poster; where readings disagree the spot is read again on its own. The old letters are painted out of the picture (OpenCV inpainting) so an edited word does not show the old one underneath; each line becomes a text box on its old baseline, sized from the line's width and its words' heights, in its colour, bold when its strokes are thick, in a font that really has its letters (Gujarati Sangam MN on a Mac, Nirmala UI on Windows). Words the OCR was unsure of are listed. Scanned PDFs read in their own alphabet too, and *exact* layout keeps their words in place
 - File conversion, any format to any other it can reach: each converter is one step (png → jpg, jpg → pdf, pdf → docx, mp4 → mp3 …) and a breadth-first search chains steps, so `heic → docx` runs `heic → pdf → docx` with OCR. A failing converter is set aside and the next shortest chain is tried. Missing programs are named (`needs ffmpeg (brew install ffmpeg)`)
 - WhatsApp, from your own number: *"send the pdf abc to rahul on whatsapp"*. The file is found by name like every other tool, the person by name from three places: contacts you saved (`save contact rahul +91 98765 43210`), your phone's contacts that WhatsApp syncs to desk-agent once it is linked, and the Mac's Contacts app. Two modes:
   - **Ready to send** (default): opens the chat in the WhatsApp app with the file attached, and stops. You check it and press Enter, so nothing goes out that you did not see. Uses the official app only
   - **Direct** (say *"send it directly"*): desk-agent is a linked device on your WhatsApp, like WhatsApp Web, and sends by itself. The reply comes only from WhatsApp's server confirming it (`WhatsApp's server confirmed it at 14:03:09`); a timeout says the file *may or may not* have arrived instead of guessing. Stricter on purpose: the file name must match exactly and `abc.pdf` next to `abc.docx` makes it ask which one. Runs in its own process (`tools/whatsapp_link.py`), so a crash in the WhatsApp library cannot take the agent down
+- WhatsApp to yourself and in everyday words: *me, myself, my number, mujhe, khud ko* all mean you. Your number comes from a contact saved as `me`, your linked WhatsApp, or the Mac's My Card in Contacts; if none has it, it asks once ("What is your own WhatsApp number?"), saves the answer and finishes the send. No file name needed for the newest file: *send my latest download to me*, *latest pdf*, *newest screenshot* (or *ss*), *newest photo on desktop*. Words around names are ignored: *abc wali pdf harsh ko*, *the file named abc*, *rahul on whatsapp*. A file that is not found gets a plain answer with what to say instead
 - WhatsApp remembers who you mean. A name that fits two people gets a numbered question, and the answer alone finishes the send: `1`, `the first one`, `dusra`, `harsh patel`, a number, or `cancel` (for 5 minutes; anything else is a new request). Each send is remembered as *words said → number* in `data/contact_history.json`; once you pick the same person twice for the same words (`harsh bhai` and `harsh` count as the same words), it stops asking and says `I picked Harsh Patel because you chose them for 'harsh bhai' before`, with the numbers to switch. A different pick makes it ask again until the new habit is picked twice. Words like *bhai, ben, didi, ji, sir, uncle* are ignored when nobody is saved with them, but words for relatives (*bhabhi, mama*) are not, because they name someone else. When one person has a landline and a mobile, the landline is dropped: WhatsApp needs a mobile number
 - Next: daily use, then a router test set, conversation memory, or a non-CLI front door
 
@@ -39,7 +42,7 @@ v1 core is working:
 - Save notes → `data/notes.txt`
 - Set reminders → `data/reminders.db` + native OS notification (fires after you quit `main.py`, and after a restart)
 - Open a folder by name, not by path (Spotlight on macOS, home-folder walk on Windows/Linux)
-- Deep research a topic → `data/research/` + history under `data/history/`
+- Deep research a topic → a cited answer in the terminal, a report in `data/research/`, history under `data/history/`
 - Convert a PDF to an editable Word file next to it (`report.pdf` → `report.docx`)
 - Summarize a PDF, Word, text or markdown file → answer in the terminal + `data/summaries/`
 - Read back notes and upcoming reminders
@@ -49,7 +52,7 @@ v1 core is working:
 
 Example: *"save a note that I need to call mom and remind me at 6pm"* → note tool + reminder tool → short confirmation.
 
-Example: *"research a PyTorch learning roadmap from math basics"* → `deep_research` → final answer in the terminal / `final_research.txt`.
+Example: *"research a PyTorch learning roadmap from math basics"* → `deep_research` → `Short answer: start with linear algebra [1], then calculus and the chain rule [2][3]…`, the sources it cites, and `Full report with all notes: data/research/2026-10-03-1412-research-a-pytorch-learning-roadmap.md`.
 
 Example: *"convert my resume pdf to word"* → `pdf_to_word` → `Converted resume.pdf to ~/Downloads/resume.docx (exact layout, 2 pages, 100.0% text match, 0 of 612 words changed)`.
 
@@ -59,7 +62,9 @@ Example: *"summarize the quarterly report"* → `summarize_document` → summary
 
 Example: *"convert logo to jpg"* → `convert_file` → `Converted logo.png to ~/Pictures/logo.jpg (png -> jpg). Note: transparent parts filled with white, JPG has no transparency`.
 
-Example: *"turn IMG_0042 into a word file"* → `convert_file` → `heic -> pdf -> docx`, the text in the photo read with OCR.
+Example: *"in the volleyball image change the date to 20 october and give me a pdf"* → `edit_file` → `Changed volleyball.png and saved ~/Downloads/volleyball (edited).pdf: '15 ઓક્ટોબર' -> '20 ઓક્ટોબર': the line is now 'તારીખ: 20 ઓક્ટોબર, સવારે 9 વાગ્યે' (checked by reading it back). Everything else is unchanged.`
+
+Example: *"convert the volleyball image to word"* → `convert_file` → `Converted volleyball.png to ~/Downloads/volleyball.docx (png -> docx). Note: text placed where it stands, 1 page, 6 lines read as Gujarati + English`.
 
 Example: *"send the pdf named abc to rahul on whatsapp"* → `send_whatsapp` → `Opened your WhatsApp chat with Rahul Sharma (+91 98765 43210) and attached abc.pdf. Check it, then press Enter to send.`
 
@@ -79,7 +84,9 @@ Windows-only packages (`win11toast`, `pywin32`) are marked in `requirements.txt`
 
 **Microsoft Word on Windows:** flowing PDF → Word conversions use Word's own PDF reader when Word 2016 or newer is installed. The agent opens a separate hidden Word, and sets Word's per-user `DisableConvertPdfWarning` option so Word's "Word will now convert your PDF" question cannot stall it. Word for Mac has no PDF converter and Pages cannot open PDFs, so macOS uses `pdf2docx` / exact layout; the `.docx` opens in Word or Pages.
 
-**Scanned PDFs (OCR)** need the Tesseract program as well as the `ocrmypdf` package: `brew install tesseract` on macOS, the [UB Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki) on Windows, `apt install tesseract-ocr` on Linux. Without it, typed PDFs still convert; scanned pages stay as images and the reply says why. For other languages install their Tesseract data and change `OCR_LANGUAGE` in `tools/documents.py` (e.g. `"eng+hin"`).
+**Scanned PDFs and pictures (OCR)** need the Tesseract program as well as the `ocrmypdf` package: `brew install tesseract` on macOS, the [UB Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki) on Windows, `apt install tesseract-ocr` on Linux. Without it, typed PDFs still convert; scanned pages stay as images and the reply says why.
+
+**Gujarati, Hindi and other alphabets:** Tesseract reads only the alphabets whose language packs are installed. On a Mac run `brew install tesseract-lang` once (every language); on Windows run the Tesseract installer again and tick the languages under *Additional language data*. The agent then finds the alphabet by itself; to force one, set `OCR_LANGUAGE=guj+eng` in `.env`. Until the packs are there, every picture or scan reply says so instead of writing Latin look-alikes into Word.
 
 **WhatsApp**
 
@@ -121,6 +128,11 @@ desk-agent/
     convert.py     # convert_file: finds the file, searches the shortest converter chain, runs it
     converters.py  # every direct conversion (Pillow, PyMuPDF, python-docx, openpyxl, ffmpeg, office apps)
     exact_layout.py # exact layout .docx: page design picture + positioned text boxes
+    ocr.py         # Tesseract: finds the alphabet, reads a picture several ways, settles disagreements
+    image_word.py  # picture -> Word: erases the old letters, puts each line back where it stood
+    edit_file.py   # edit_file: request -> checked edits -> picture or PDF changed -> read back -> new file
+    image_edit.py  # changes words in a picture: redraws the changed words, slides the rest as their own pixels
+    pdf_edit.py    # changes words in a PDF's text, in its own font, keeping the line's alignment
     contacts.py    # who "rahul" is: saved contacts, WhatsApp's synced contacts, the Mac Contacts app
     whatsapp.py    # send_whatsapp: ready to send (WhatsApp app, you press Enter) or direct; link_whatsapp
     whatsapp_link.py # direct mode's own process: linked device (neonize), link / send / unlink
@@ -131,7 +143,7 @@ desk-agent/
   data/
     notes.txt, reminders.db, reminders.log   # personal, kept out of git
     contacts.json, contact_history.json, whatsapp.db   # saved numbers, who each name meant, the WhatsApp link; kept out of git
-    research/      # site_contents, conclusion, final_research (runtime)
+    research/      # one report per research: answer, sources, what is still unknown, all notes (runtime)
     summaries/     # last summary per file (runtime)
     history/       # saved research answers (runtime)
 ```
@@ -146,11 +158,12 @@ desk-agent/
 | save note     | done   | append text to `data/notes.txt`                                         |
 | reminder      | done   | saved in SQLite; background service shows it, survives restarts         |
 | open file     | done   | open a folder by name; asks when the name is ambiguous                  |
-| deep research | done   | search → fetch sites → conclusions → enough? → final answer             |
+| deep research | done   | plan → search → read → notes with sources → what is missing? → cited answer |
 | read notes    | done   | read back `data/notes.txt`, router answers from it                      |
 | list reminders| done   | reminders not yet shown, sorted; overdue ones marked                     |
 | pdf to word   | done   | find PDF → OCR if scanned → remove shadows → flowing or exact layout → text match |
 | summarize     | done   | find file → split into parts → notes per part → one summary             |
+| edit file     | done   | read file → request becomes checked edits → only those words change → read back → new PDF or picture |
 | convert file  | done   | find file → shortest converter chain (breadth-first search) → run it    |
 | send whatsapp | done   | find file + person → WhatsApp app with the file attached, or send directly as a linked device |
 | save contact  | done   | name → phone number (any country's format) in `data/contacts.json`      |
@@ -163,7 +176,7 @@ desk-agent/
 
 - Python
 - LLM: Groq (primary) + Ollama local fallback (`qwen2.5:14b`)
-- Web search: `ddgs`
+- Web search: `ddgs`; page text: `trafilatura`
 - Conversion: Pillow + `pillow-heif` (pictures), `openpyxl` (Excel), `markdown`, ffmpeg (audio / video), office apps when present
 - Documents: `pdf2docx` + PyMuPDF (PDF → Word), `pikepdf` (shadow cleanup), `ocrmypdf` + Tesseract (OCR), `python-docx` (Word files), Microsoft Word via `pywin32` on Windows
 - WhatsApp: the official app (ready to send); `neonize` linked device (direct); `phonenumbers` for numbers
