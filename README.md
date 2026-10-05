@@ -25,6 +25,7 @@ v1 core is working:
   - **Fonts**: fonts not installed on this computer (including Office's Calibri / Cambria from the Word template) are swapped for an installed font of the same kind, so Pages stops reporting missing fonts
 - Summaries: PDF / Word / text files; long files are split into parts, each part summarized, then one summary from the parts (map → reduce)
 - Recall: ask "what are my notes?" or "any reminders today?" and the router answers from the saved files
+- Change words in a picture or PDF and get the finished file back, no Word in between: *in the volleyball image change the date to 20 October and give me a pdf*. The file is read (OCR for pictures and scans, the PDF's own text otherwise), the request becomes exact edits (`line 3: "15 ઓક્ટોબર" → "20 ઓક્ટોબર"`) and every edit is checked against the real text, so the model cannot invent what to change; a quoted request (*change "15" to "20"*) needs no model at all. In a picture only the changed words are redrawn, in the line's size, colour, weight (regular or bold, measured against the font) and drop shadow, on its old baseline; words that must slide (a longer or shorter word, a centred line) move as their own pixels, so their shapes stay exact, and every other line stays the same pixel for pixel. In a PDF with real text the words are changed as text, in the PDF's own font when it has the letters, keeping centred, left or right alignment (an amounts column stays lined up); a Gujarati or Hindi line in a PDF is read by OCR and only that line is redrawn as a picture, since PDFs do not keep those joined letters reliably. Each changed line is read back to check it, and a new file is saved (`volleyball (edited).pdf`); the original is never touched. Text only: colours, photos and shapes need an image-generating model
 - Picture to Word, in any alphabet: *convert the volleyball image to word* keeps the picture as the page and makes its words editable where they stand. The alphabet is found from the letters themselves (a quick read with every installed language pack, then the Unicode block most letters fall in), because Gujarati read with the English pack comes out as Latin look-alikes (`વોલીબોલ` → `dicletia`) and Tesseract's own script guess called a Gujarati poster "Latin". The picture is read several ways (layout-aware, sparse, smoothed, each colour channel) since no single way reads every poster; where readings disagree the spot is read again on its own. The old letters are painted out of the picture (OpenCV inpainting) so an edited word does not show the old one underneath; each line becomes a text box on its old baseline, sized from the line's width and its words' heights, in its colour, bold when its strokes are thick, in a font that really has its letters (Gujarati Sangam MN on a Mac, Nirmala UI on Windows). Words the OCR was unsure of are listed. Scanned PDFs read in their own alphabet too, and *exact* layout keeps their words in place
 - File conversion, any format to any other it can reach: each converter is one step (png → jpg, jpg → pdf, pdf → docx, mp4 → mp3 …) and a breadth-first search chains steps, so `heic → docx` runs `heic → pdf → docx` with OCR. A failing converter is set aside and the next shortest chain is tried. Missing programs are named (`needs ffmpeg (brew install ffmpeg)`)
 - WhatsApp, from your own number: *"send the pdf abc to rahul on whatsapp"*. The file is found by name like every other tool, the person by name from three places: contacts you saved (`save contact rahul +91 98765 43210`), your phone's contacts that WhatsApp syncs to desk-agent once it is linked, and the Mac's Contacts app. Two modes:
@@ -60,6 +61,8 @@ Example: *"convert report.pdf to word, I want to edit it"* → `pdf_to_word` wit
 Example: *"summarize the quarterly report"* → `summarize_document` → summary in the terminal.
 
 Example: *"convert logo to jpg"* → `convert_file` → `Converted logo.png to ~/Pictures/logo.jpg (png -> jpg). Note: transparent parts filled with white, JPG has no transparency`.
+
+Example: *"in the volleyball image change the date to 20 october and give me a pdf"* → `edit_file` → `Changed volleyball.png and saved ~/Downloads/volleyball (edited).pdf: '15 ઓક્ટોબર' -> '20 ઓક્ટોબર': the line is now 'તારીખ: 20 ઓક્ટોબર, સવારે 9 વાગ્યે' (checked by reading it back). Everything else is unchanged.`
 
 Example: *"convert the volleyball image to word"* → `convert_file` → `Converted volleyball.png to ~/Downloads/volleyball.docx (png -> docx). Note: text placed where it stands, 1 page, 6 lines read as Gujarati + English`.
 
@@ -127,6 +130,9 @@ desk-agent/
     exact_layout.py # exact layout .docx: page design picture + positioned text boxes
     ocr.py         # Tesseract: finds the alphabet, reads a picture several ways, settles disagreements
     image_word.py  # picture -> Word: erases the old letters, puts each line back where it stood
+    edit_file.py   # edit_file: request -> checked edits -> picture or PDF changed -> read back -> new file
+    image_edit.py  # changes words in a picture: redraws the changed words, slides the rest as their own pixels
+    pdf_edit.py    # changes words in a PDF's text, in its own font, keeping the line's alignment
     contacts.py    # who "rahul" is: saved contacts, WhatsApp's synced contacts, the Mac Contacts app
     whatsapp.py    # send_whatsapp: ready to send (WhatsApp app, you press Enter) or direct; link_whatsapp
     whatsapp_link.py # direct mode's own process: linked device (neonize), link / send / unlink
@@ -157,6 +163,7 @@ desk-agent/
 | list reminders| done   | reminders not yet shown, sorted; overdue ones marked                     |
 | pdf to word   | done   | find PDF → OCR if scanned → remove shadows → flowing or exact layout → text match |
 | summarize     | done   | find file → split into parts → notes per part → one summary             |
+| edit file     | done   | read file → request becomes checked edits → only those words change → read back → new PDF or picture |
 | convert file  | done   | find file → shortest converter chain (breadth-first search) → run it    |
 | send whatsapp | done   | find file + person → WhatsApp app with the file attached, or send directly as a linked device |
 | save contact  | done   | name → phone number (any country's format) in `data/contacts.json`      |

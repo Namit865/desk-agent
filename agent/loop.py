@@ -22,6 +22,7 @@ def decide(user_text,already):
         {"name":"send_whatsapp","text":"file name to send, or empty for a message only","to":"person name or phone number","message":"words to send, or empty","direct":false}
         {"name":"save_contact","text":"person name","number":"phone number"}
         {"name":"link_whatsapp","text":""}
+        {"name":"edit_file","text":"picture or pdf file name","instruction":"the change in the user's words","to":"pdf, png, jpg, or empty for the same type"}
         {"name":"deep_research","text":"research question"}
         {"name":"done","text":"short confirmation"}
         {"name":"unknown","text":"why you cannot help"}
@@ -33,7 +34,7 @@ def decide(user_text,already):
         4. Two user asks → do the next unfinished one only.
         5. deep_research at most once. If it is already in Already used tools, reply done.
         6. If you cannot follow these shapes, reply unknown.
-        7. use tools only when the user wants a side effect (save, remind, open, research, convert, summarize, send on WhatsApp) or asks about their saved notes or reminders
+        7. use tools only when the user wants a side effect (save, remind, open, research, convert, edit, summarize, send on WhatsApp) or asks about their saved notes or reminders
         8. If they are chatting or asking for an explaination, use done and write a clear helpful answer in text.
         9. Stay short unless they ask for details.
         10. For open_file, pdf_to_word, summarize_document and convert_file, text is the plain name the user said ("downloads", "desk-agent", "resume", "report.pdf"). Never invent an absolute path.
@@ -46,6 +47,7 @@ def decide(user_text,already):
         17. For send_whatsapp, text is only the file name or what describes the file, never the person or "whatsapp"; to is the person as the user said it, and "me" when they send it to themselves (me, myself, my number, mujhe, khud ko); message is only words the user wants sent to them. Examples: "send the pdf named abc to rahul" -> text "abc pdf", to "rahul". "abc wali pdf harsh ko whatsapp kar do" -> text "abc pdf", to "harsh". "send my latest download to myself" -> text "latest download", to "me". "send the newest screenshot to mom" -> text "newest screenshot", to "mom".
         18. direct is true only when the user says to send it directly, automatically or without opening WhatsApp. Otherwise direct is false.
         19. "save rahul's number +91 98765 43210" -> save_contact. "my number is +91 98765 43210" -> save_contact with text "me". "link my whatsapp" -> link_whatsapp.
+        20. To change words inside a picture or PDF and get the finished file back (not a Word file), use edit_file. text is only the file name, instruction is what to change in the user's own words (keep their quotes), to is pdf, png or jpg only if they ask for that type. Example: "in the volleyball image change the date to 20 october and give me a pdf" -> text "volleyball image", instruction "change the date to 20 october", to "pdf".
 
     User asked this question:
     """ + user_text + f"\n\nCurrent local time is: {now_str}\n" + "Already used tools: " + (already if already else "none"))

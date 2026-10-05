@@ -9,7 +9,7 @@ SpeechRecognition
 pyaudio
 piper-tts
 pdf2docx
-pymupdf>=1.24.3
+pymupdf>=1.25.0
 python-docx
 ocrmypdf # only for scanned PDFs, also needs tesseract (brew install tesseract)
 pikepdf
