@@ -18,5 +18,6 @@ Pillow
 pillow-heif # iPhone HEIC photos
 openpyxl
 markdown
+opencv-python-headless # pictures to Word: takes the old text out of the picture (pdf2docx needs it too)
 phonenumbers # reads phone numbers in any country's format
 neonize # WhatsApp "send directly"; on a Mac also needs: brew install libmagic

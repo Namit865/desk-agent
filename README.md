@@ -25,6 +25,7 @@ v1 core is working:
   - **Fonts**: fonts not installed on this computer (including Office's Calibri / Cambria from the Word template) are swapped for an installed font of the same kind, so Pages stops reporting missing fonts
 - Summaries: PDF / Word / text files; long files are split into parts, each part summarized, then one summary from the parts (map → reduce)
 - Recall: ask "what are my notes?" or "any reminders today?" and the router answers from the saved files
+- Picture to Word, in any alphabet: *convert the volleyball image to word* keeps the picture as the page and makes its words editable where they stand. The alphabet is found from the letters themselves (a quick read with every installed language pack, then the Unicode block most letters fall in), because Gujarati read with the English pack comes out as Latin look-alikes (`વોલીબોલ` → `dicletia`) and Tesseract's own script guess called a Gujarati poster "Latin". The picture is read several ways (layout-aware, sparse, smoothed, each colour channel) since no single way reads every poster; where readings disagree the spot is read again on its own. The old letters are painted out of the picture (OpenCV inpainting) so an edited word does not show the old one underneath; each line becomes a text box on its old baseline, sized from the line's width and its words' heights, in its colour, bold when its strokes are thick, in a font that really has its letters (Gujarati Sangam MN on a Mac, Nirmala UI on Windows). Words the OCR was unsure of are listed. Scanned PDFs read in their own alphabet too, and *exact* layout keeps their words in place
 - File conversion, any format to any other it can reach: each converter is one step (png → jpg, jpg → pdf, pdf → docx, mp4 → mp3 …) and a breadth-first search chains steps, so `heic → docx` runs `heic → pdf → docx` with OCR. A failing converter is set aside and the next shortest chain is tried. Missing programs are named (`needs ffmpeg (brew install ffmpeg)`)
 - WhatsApp, from your own number: *"send the pdf abc to rahul on whatsapp"*. The file is found by name like every other tool, the person by name from three places: contacts you saved (`save contact rahul +91 98765 43210`), your phone's contacts that WhatsApp syncs to desk-agent once it is linked, and the Mac's Contacts app. Two modes:
   - **Ready to send** (default): opens the chat in the WhatsApp app with the file attached, and stops. You check it and press Enter, so nothing goes out that you did not see. Uses the official app only
@@ -60,7 +61,7 @@ Example: *"summarize the quarterly report"* → `summarize_document` → summary
 
 Example: *"convert logo to jpg"* → `convert_file` → `Converted logo.png to ~/Pictures/logo.jpg (png -> jpg). Note: transparent parts filled with white, JPG has no transparency`.
 
-Example: *"turn IMG_0042 into a word file"* → `convert_file` → `heic -> pdf -> docx`, the text in the photo read with OCR.
+Example: *"convert the volleyball image to word"* → `convert_file` → `Converted volleyball.png to ~/Downloads/volleyball.docx (png -> docx). Note: text placed where it stands, 1 page, 6 lines read as Gujarati + English`.
 
 Example: *"send the pdf named abc to rahul on whatsapp"* → `send_whatsapp` → `Opened your WhatsApp chat with Rahul Sharma (+91 98765 43210) and attached abc.pdf. Check it, then press Enter to send.`
 
@@ -80,7 +81,9 @@ Windows-only packages (`win11toast`, `pywin32`) are marked in `requirements.txt`
 
 **Microsoft Word on Windows:** flowing PDF → Word conversions use Word's own PDF reader when Word 2016 or newer is installed. The agent opens a separate hidden Word, and sets Word's per-user `DisableConvertPdfWarning` option so Word's "Word will now convert your PDF" question cannot stall it. Word for Mac has no PDF converter and Pages cannot open PDFs, so macOS uses `pdf2docx` / exact layout; the `.docx` opens in Word or Pages.
 
-**Scanned PDFs (OCR)** need the Tesseract program as well as the `ocrmypdf` package: `brew install tesseract` on macOS, the [UB Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki) on Windows, `apt install tesseract-ocr` on Linux. Without it, typed PDFs still convert; scanned pages stay as images and the reply says why. For other languages install their Tesseract data and change `OCR_LANGUAGE` in `tools/documents.py` (e.g. `"eng+hin"`).
+**Scanned PDFs and pictures (OCR)** need the Tesseract program as well as the `ocrmypdf` package: `brew install tesseract` on macOS, the [UB Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki) on Windows, `apt install tesseract-ocr` on Linux. Without it, typed PDFs still convert; scanned pages stay as images and the reply says why.
+
+**Gujarati, Hindi and other alphabets:** Tesseract reads only the alphabets whose language packs are installed. On a Mac run `brew install tesseract-lang` once (every language); on Windows run the Tesseract installer again and tick the languages under *Additional language data*. The agent then finds the alphabet by itself; to force one, set `OCR_LANGUAGE=guj+eng` in `.env`. Until the packs are there, every picture or scan reply says so instead of writing Latin look-alikes into Word.
 
 **WhatsApp**
 
@@ -122,6 +125,8 @@ desk-agent/
     convert.py     # convert_file: finds the file, searches the shortest converter chain, runs it
     converters.py  # every direct conversion (Pillow, PyMuPDF, python-docx, openpyxl, ffmpeg, office apps)
     exact_layout.py # exact layout .docx: page design picture + positioned text boxes
+    ocr.py         # Tesseract: finds the alphabet, reads a picture several ways, settles disagreements
+    image_word.py  # picture -> Word: erases the old letters, puts each line back where it stood
     contacts.py    # who "rahul" is: saved contacts, WhatsApp's synced contacts, the Mac Contacts app
     whatsapp.py    # send_whatsapp: ready to send (WhatsApp app, you press Enter) or direct; link_whatsapp
     whatsapp_link.py # direct mode's own process: linked device (neonize), link / send / unlink
